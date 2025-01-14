@@ -23,7 +23,7 @@ class Music(commands.Cog):
         self.nodes = []
 
         # check if self.bot has attr database
-        if not hasattr(self.bot, "database"):
+        if hasattr(self.bot, "database"):
             self.database: DatabaseManager = self.bot.database
 
     async def cog_load(self):
@@ -149,6 +149,35 @@ class Music(commands.Cog):
                 "An error occurred while joining voice channel.",
                 ephemeral=as_ephemeral,
             )
+
+    def convert_timestamp_to_milliseconds(timestamp: str) -> int:
+        """Convert a timestamp string (e.g., '1m30s', '90s') to milliseconds."""
+        total_seconds = 0
+
+        # Parse minutes
+        minutes_match = re.search(r"(\d+)m", timestamp.lower())
+        if minutes_match:
+            total_seconds += int(minutes_match.group(1)) * 60
+
+        # Parse seconds
+        seconds_match = re.search(r"(\d+)s", timestamp.lower())
+        if seconds_match:
+            total_seconds += int(seconds_match.group(1))
+
+        if not minutes_match and not seconds_match:
+            raise ValueError("Invalid timestamp format")
+
+        return total_seconds * 1000  # Convert to milliseconds
+
+    def format_duration(milliseconds: int) -> str:
+        """Format milliseconds into a readable duration string."""
+        seconds = milliseconds // 1000
+        minutes = seconds // 60
+        seconds = seconds % 60
+
+        if minutes > 0:
+            return f"{minutes}m{seconds}s"
+        return f"{seconds}s"
 
     def convert_autoplay_mode(self, mode_string) -> Optional[wavelink.AutoPlayMode]:
         """Converts a string to a wavelink.AutoPlayMode enum member (one-liner)."""
@@ -453,14 +482,35 @@ class Music(commands.Cog):
     async def seek(self, interaction: discord.Interaction, timestamp: str):
         player: wavelink.Player = interaction.guild.voice_client
 
-        if not player:
+        if not player or not player.current:
             await interaction.response.send_message(
                 "There is no music playing or player not connected", ephemeral=True
             )
             return
 
-        # position in millisecs
-        await player.seek()
+        # Convert timestamp string to milliseconds
+        try:
+            milliseconds = self.convert_timestamp_to_milliseconds(timestamp)
+        except ValueError:
+            await interaction.response.send_message(
+                "Invalid timestamp format. Please use format like '1m30s', '90s', etc.",
+                ephemeral=True,
+            )
+            return
+
+        # Check if the timestamp is within track duration
+        if milliseconds > player.current.length:
+            await interaction.response.send_message(
+                f"Timestamp exceeds track duration ({self.format_duration(player.current.length)})",
+                ephemeral=True,
+            )
+            return
+
+        # Seek to position
+        await player.seek(milliseconds)
+        await interaction.response.send_message(
+            f"Seeked to {self.format_duration(milliseconds)}"
+        )
 
     @app_commands.command(name="shuffle", description="Shuffles the queue.")
     @app_commands.guild_only()
@@ -604,7 +654,7 @@ class Music(commands.Cog):
         player.queue.clear()
         await interaction.response.send_message("Queue cleared", ephemeral=True)
 
-    @playlist_group.command(name="list", description="List playlists.")
+    @playlist_group.command(name="list", description="List your saved playlists.")
     async def playlist_list(self, interaction: discord.Interaction):
         await interaction.response.defer()
 
@@ -634,11 +684,11 @@ class Music(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         try:
-            await self.bot.database.insert(
+            await self.database.insert(
                 "playlists",
                 [{"name": name, "user_id": interaction.user.id, "is_public": True}],
                 mode="upsert",
-                conflict_columns=["name"]
+                conflict_columns=["name"],
             )
             await interaction.followup.send(
                 f"Playlist '{name}' created, use '/playlist add' to add tracks or '/playlist current' to insert current queue into playlist",
@@ -666,7 +716,7 @@ class Music(commands.Cog):
             )
             return
 
-        playlist = await self.bot.database.get_one(
+        playlist = await self.database.get_one(
             "playlists",
             "name = ? AND user_id = ?",
             (playlist_name, interaction.user.id),
@@ -789,7 +839,7 @@ class Music(commands.Cog):
             f"Playlist '{playlist_name}' renamed to '{new_name}'", ephemeral=True
         )
 
-    # some commands TODO: configure 
+    # some commands TODO: configure
 
     @app_commands.command(name="lavareload", description="Reloads Lavalink nodes")
     @app_commands.describe(lavalink_nodes="json string of lavalink nodes")
@@ -797,9 +847,7 @@ class Music(commands.Cog):
         await interaction.response.defer()
 
         if interaction.user.id not in ADMIN_IDS:
-            await interaction.followup.send(
-                "You are not an admin", ephemeral=True
-            )
+            await interaction.followup.send("You are not an admin", ephemeral=True)
             return
 
         try:
@@ -824,9 +872,7 @@ class Music(commands.Cog):
         await interaction.response.defer()
 
         if interaction.user.id not in ADMIN_IDS:
-            await interaction.followup.send(
-                "You are not an admin", ephemeral=True
-            )
+            await interaction.followup.send("You are not an admin", ephemeral=True)
             return
 
         self.nodes.clear()
