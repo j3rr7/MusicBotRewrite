@@ -634,10 +634,9 @@ class Music(commands.Cog):
         await interaction.response.defer()
 
         try:
-            await self.database.insert(
+            await self.bot.database.insert(
                 "playlists",
-                [{"name": name, "user_id": interaction.user.id}],
-                mode="replace",
+                [{"name": name, "user_id": interaction.user.id, "is_public": True}],
             )
             await interaction.followup.send(
                 f"Playlist '{name}' created, use '/playlist add' to add tracks or '/playlist current' to insert current queue into playlist",
@@ -665,7 +664,7 @@ class Music(commands.Cog):
             )
             return
 
-        playlist = await self.database.get_one(
+        playlist = await self.bot.database.get_one(
             "playlists",
             "name = ? AND user_id = ?",
             (playlist_name, interaction.user.id),
