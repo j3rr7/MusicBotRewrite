@@ -78,6 +78,59 @@ class DatabaseManager:
             values = tuple(row.values())
             await self.query(query, values)
 
+    async def insert(
+        self,
+        table_name: str,
+        data: List[Dict],
+        mode: str = "normal",
+        conflict_columns: Optional[List[str]] = None,
+    ):
+        """
+        Inserts data into a table with optional IGNORE/REPLACE modes or ON CONFLICT resolution.
+
+        Args:
+            table_name: Name of the target table
+            data: List of dictionaries containing row data
+            mode: 'normal', 'ignore', 'replace', or 'upsert'
+            conflict_columns: List of column names to use as conflict target (required for upsert mode)
+        """
+        if not data:
+            return
+
+        columns = list(data[0].keys())
+        placeholders = ", ".join(["?"] * len(columns))
+        columns_str = ", ".join(columns)
+        if mode.lower() == "upsert":
+            if not conflict_columns:
+                raise ValueError(
+                    "conflict_columns must be specified when using upsert mode"
+                )
+
+            # Create the ON CONFLICT clause
+            conflict_target = ", ".join(conflict_columns)
+
+            # Create the SET clause for updating all columns except the conflict columns
+            update_columns = [col for col in columns if col not in conflict_columns]
+            set_clause = ", ".join(f"{col} = EXCLUDED.{col}" for col in update_columns)
+
+            query = f"""
+                INSERT INTO {table_name} ({columns_str}) 
+                VALUES ({placeholders})
+                ON CONFLICT ({conflict_target}) DO UPDATE SET {set_clause}
+            """
+        else:
+            insert_type = {
+                "normal": "INSERT",
+                "ignore": "INSERT OR IGNORE",
+                "replace": "INSERT OR REPLACE",
+            }.get(mode.lower(), "INSERT")
+
+            query = f"{insert_type} INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+
+        for row in data:
+            values = tuple(row.values())
+            await self.query(query, values)
+
     async def update(
         self,
         table_name: str,
@@ -222,11 +275,17 @@ async def main():
 
     # await db_manager.insert("playlists", [{"user_id": 1, "name": "test", "is_public": True}], mode="ignore")
 
-    results = await db_manager.get("playlists", "user_id = ?", (1,))
-    playlists_name = []
-    for result in results:
-        playlists_name.append(result[5])
-    print(playlists_name)
+    await db_manager.insert(
+        "playlists", [{"user_id": 1, "name": "test", "is_public": True}], mode="upsert", conflict_columns=["name"]
+    )
+
+    result = await db_manager.get("playlists")
+    print(result)
+    # results = await db_manager.get("playlists", "user_id = ?", (1,))
+    # playlists_name = []
+    # for result in results:
+    #     playlists_name.append(result[5])
+    # print(playlists_name)
 
 
 if __name__ == "__main__":

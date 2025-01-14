@@ -53,10 +53,8 @@ class Admin(commands.Cog):
     async def reload(self, interaction: discord.Interaction, cog: str):
         await interaction.response.defer(ephemeral=True)
         try:
-            await self.bot.reload_extension(f"cogs.{cog}")
+            await self.bot.reload_extension(f"{cog}")
             await interaction.followup.send(f"Cog {cog} reloaded.", ephemeral=True)
-        except commands.ExtensionNotFound:
-            await interaction.followup.send(f"Cog {cog} not found.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"Error: {e}", ephemeral=True)
 
@@ -75,7 +73,7 @@ class Admin(commands.Cog):
     async def load(self, interaction: discord.Interaction, cog: str):
         await interaction.response.defer(ephemeral=True)
         try:
-            await self.bot.load_extension(f"cogs.{cog}")
+            await self.bot.load_extension(f"{cog}")
             await interaction.followup.send(f"Cog {cog} loaded.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"Error: {e}", ephemeral=True)
@@ -94,11 +92,10 @@ class Admin(commands.Cog):
     @app_commands.describe(cog="The cog to unload.")
     async def unload(self, interaction: discord.Interaction, cog: str):
         await interaction.response.defer(ephemeral=True)
+
         try:
-            await self.bot.unload_extension(f"cogs.{cog}")
+            await self.bot.unload_extension(f"{cog}")
             await interaction.followup.send(f"Cog {cog} unloaded.", ephemeral=True)
-        except commands.ExtensionNotLoaded:
-            await interaction.followup.send(f"Cog {cog} not loaded.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"Error: {e}", ephemeral=True)
 

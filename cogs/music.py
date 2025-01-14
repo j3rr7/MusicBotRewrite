@@ -631,12 +631,14 @@ class Music(commands.Cog):
     @playlist_group.command(name="create", description="Creates a playlist.")
     @app_commands.describe(name="The name of the playlist.")
     async def playlist_create(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         try:
             await self.bot.database.insert(
                 "playlists",
                 [{"name": name, "user_id": interaction.user.id, "is_public": True}],
+                mode="upsert",
+                conflict_columns=["name"]
             )
             await interaction.followup.send(
                 f"Playlist '{name}' created, use '/playlist add' to add tracks or '/playlist current' to insert current queue into playlist",
