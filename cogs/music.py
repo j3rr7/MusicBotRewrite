@@ -7,7 +7,7 @@ import traceback
 from database import DatabaseManager
 from discord import app_commands
 from discord.ext import commands
-from typing import Optional
+from typing import Optional, List
 from views.queue import QueueView
 from config import ADMIN_IDS
 
@@ -654,39 +654,30 @@ class Music(commands.Cog):
         player.queue.clear()
         await interaction.response.send_message("Queue cleared", ephemeral=True)
 
-    @playlist_group.command(name="list", description="List your saved playlists.")
-    async def playlist_list(self, interaction: discord.Interaction):
+    @playlist_group.command(name="list", description="Lists of saved playlists.")
+    @app_commands.describe(member="Playlist owner")
+    async def playlist_list(self, interaction: discord.Interaction, member: discord.Member = None):
         await interaction.response.defer()
 
         try:
-            playlists = await self.database.get(
-                "playlists", "user_id = ?", (interaction.user.id,)
-            )
-            if not playlists or len(playlists) == 0:
-                await interaction.followup.send("You have no playlists", ephemeral=True)
-                return
+            playlists = await self.database.get("playlists")
+            messages = ""
 
-            embed = discord.Embed(
-                title="Playlists",
-                description="\n".join([f"**{playlist[2]}**" for playlist in playlists]),
-                color=discord.Color.green(),
-            )
-
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(messages, ephemeral=True)
         except Exception as e:
             await interaction.followup.send(
                 f"Failed to list playlists: {e}", ephemeral=True
             )
 
     @playlist_group.command(name="create", description="Creates a playlist.")
-    @app_commands.describe(name="The name of the playlist.")
-    async def playlist_create(self, interaction: discord.Interaction, name: str):
+    @app_commands.describe(name="The name of the playlist.", public="Whether the playlist is shown to other users.")
+    async def playlist_create(self, interaction: discord.Interaction, name: str, public: bool = True):
         await interaction.response.defer(ephemeral=True)
 
         try:
             await self.database.insert(
                 "playlists",
-                [{"name": name, "user_id": interaction.user.id, "is_public": True}],
+                [{"name": name, "user_id": interaction.user.id, "is_public": bool(public)}],
                 mode="upsert",
                 conflict_columns=["name"],
             )
@@ -698,6 +689,64 @@ class Music(commands.Cog):
             await interaction.followup.send(
                 f"Failed to create playlist: {e}", ephemeral=True
             )
+    
+    @playlist_group.command(name="rename", description="Renames a playlist.")
+    @app_commands.describe(
+        playlist_name="The name of the playlist.",
+        new_name="The new name of the playlist.",
+    )
+    async def playlist_rename(
+        self, interaction: discord.Interaction, playlist_name: str, new_name: str
+    ):
+        await interaction.response.defer()
+
+        try:
+            # get playlist with that name
+            playlist = self.database.get_one("playlists", "name = ?, user_id = ?", (playlist_name, interaction.user.id))
+            if not playlist:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' not found", ephemeral=True
+                )
+                return
+            
+            # check ownership
+            if int(playlist[2]) != interaction.user.id:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' is not owned by you", ephemeral=True
+                )
+                return
+
+            # update playlist
+            await self.database.update(
+                "playlists",
+                {"name": new_name, "updated_at": "CURRENT_TIMESTAMP()"},
+                "name = ? AND user_id = ? AND id = ?",
+                (playlist_name, interaction.user.id, playlist[0]),
+                exclude_keys=["id"],
+            )
+        except Exception as e:
+            await interaction.followup.send(
+                f"Failed to rename playlist: {e}", ephemeral=True
+            )
+
+        await interaction.followup.send(
+            f"Playlist '{playlist_name}' renamed to '{new_name}'", ephemeral=True
+        )
+
+    @playlist_group.command(name="delete", description="Remove a playlist.")
+    @app_commands.describe(playlist_name="The name of the playlist.")
+    async def playlist_delete(self, interaction: discord.Interaction, playlist_name: str):
+        await interaction.response.defer()
+
+
+
+    @playlist_rename.autocomplete(name="playlist_name")
+    async def playlist_rename_playlistname_autocomplete(self, interaction: discord.Interaction) -> List[app_commands.Choice[str]]:
+        try:
+            return [app_commands.Choice(name=playlist[0], value=playlist[0]) for playlist in await self.database.get("playlists", "user_id = ?", (interaction.user.id,))]
+        except Exception as e:
+            return []
+
 
     @playlist_group.command(
         name="current", description="Inserts the current queue into a playlist."
@@ -812,73 +861,7 @@ class Music(commands.Cog):
         # TODO: Implement remove track from playlist
 
         await interaction.followup.send("Remove track from playlist", ephemeral=True)
-
-    @playlist_group.command(name="rename", description="Renames a playlist.")
-    @app_commands.describe(
-        playlist_name="The name of the playlist.",
-        new_name="The new name of the playlist.",
-    )
-    async def playlist_rename(
-        self, interaction: discord.Interaction, playlist_name: str, new_name: str
-    ):
-        await interaction.response.defer()
-
-        try:
-            await self.database.update(
-                "playlists",
-                {"name": new_name},
-                "name = ? AND user_id = ?",
-                (playlist_name, interaction.user.id),
-            )
-        except Exception as e:
-            await interaction.followup.send(
-                f"Failed to rename playlist: {e}", ephemeral=True
-            )
-
-        await interaction.followup.send(
-            f"Playlist '{playlist_name}' renamed to '{new_name}'", ephemeral=True
-        )
-
-    # some commands TODO: configure
-
-    @app_commands.command(name="lavareload", description="Reloads Lavalink nodes")
-    @app_commands.describe(lavalink_nodes="json string of lavalink nodes")
-    async def lavareload(self, interaction: discord.Interaction, lavalink_nodes: str):
-        await interaction.response.defer()
-
-        if interaction.user.id not in ADMIN_IDS:
-            await interaction.followup.send("You are not an admin", ephemeral=True)
-            return
-
-        try:
-            lavalink_nodes_json = json.loads(lavalink_nodes)
-            for node in lavalink_nodes_json:
-                self.nodes.append(
-                    wavelink.Node(
-                        uri=node["uri"],
-                        identifier=node["identifier"],
-                        password=node["password"],
-                    )
-                )
-        except Exception as e:
-            await interaction.followup.send(
-                f"Failed to parse lavalink nodes: {e}", ephemeral=True
-            )
-
-        await self.setup_lavalink()
-
-    @app_commands.command(name="lavaclear", description="Clears lavalink nodes")
-    async def lavaclear(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-
-        if interaction.user.id not in ADMIN_IDS:
-            await interaction.followup.send("You are not an admin", ephemeral=True)
-            return
-
-        self.nodes.clear()
-        await self.setup_lavalink()
-        await interaction.followup.send("Lavalink nodes cleared", ephemeral=True)
-
+    
     async def cog_app_command_error(
         self,
         interaction: discord.Interaction[discord.Client],

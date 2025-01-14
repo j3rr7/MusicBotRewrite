@@ -144,6 +144,25 @@ class DatabaseManager:
         values = tuple(data.values()) + (where_params or ())
         await self.query(query, values)
 
+    async def update(
+        self,
+        table_name: str,
+        data: Dict,
+        where_clause: str,
+        where_params: Optional[tuple] = None,
+        exclude_keys: Optional[List[str]] = None,
+    ):
+        """Updates data in a table, optionally excluding specific keys."""
+
+        exclude_keys = exclude_keys or []
+        filtered_data = {k: v for k, v in data.items() if k not in exclude_keys}
+
+        set_clause = ", ".join([f"{key} = ?" for key in filtered_data])
+        query = f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}"
+        values = tuple(filtered_data.values()) + (where_params or ())
+
+        await self.query(query, values)
+
     async def delete(
         self, table_name: str, where_clause: str, where_params: Optional[tuple] = None
     ):
@@ -201,10 +220,11 @@ CREATE TABLE IF NOT EXISTS user_settings (
 CREATE TABLE IF NOT EXISTS playlists (
   id UUID PRIMARY KEY DEFAULT uuid(),
   user_id BIGINT,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   is_public BOOLEAN DEFAULT false,
+  tracks_amount INTEGER DEFAULT 0,
 );
 
 CREATE TABLE IF NOT EXISTS tracks (
@@ -224,69 +244,9 @@ CREATE TABLE IF NOT EXISTS tracks (
 
 async def main():
     await on_setup_tables("database.db")
-    await on_setup_tables("test.db")
-    db_manager = DatabaseManager("test.db")
-
-    # # Create tests
-    # await db_manager.create_table("guilds", "id BIGINT PRIMARY KEY")
-    # await db_manager.create_table("members", "id BIGINT PRIMARY KEY")
-    # await db_manager.create_table("user_settings", "user_id BIGINT PRIMARY KEY")
-    # await db_manager.create_table("playlists", "id UUID PRIMARY KEY")
-    # await db_manager.create_table("playlist_items", "id UUID PRIMARY KEY")
-
-    # # Insert test data
-    # await db_manager.insert("guilds", [{"id": 1}])
-    # await db_manager.insert("members", [{"id": 1}])
-    # await db_manager.insert("user_settings", [{"user_id": 1}])
-
-    # # Query tests
-    # await db_manager.get("guilds")
-
-    # # Update tests
-    # await db_manager.update("guilds", {"id": 2}, "id = ?", (1,))
-
-    # # Delete tests
-    # await db_manager.delete("guilds", "id = ?", (2,))
-
-    # # Get one tests
-    # await db_manager.get_one("guilds", "id = ?", (1,))
-
-    # # Table exists tests
-    # await db_manager.table_exists("guilds")
-
-    # print all tables
-    # result = await db_manager.query("SELECT name FROM sqlite_master WHERE type='table'")
-    # print(result)
-
-    # result = await db_manager.get_one("user_settings", "user_id = ?", (1,))
-    # print(result)
-    # if result is None:
-    #     await db_manager.insert(
-    #         "user_settings", [{"user_id": 1, "volume": 30, "autoplay": "partial"}]
-    #     )
-
-    # result = await db_manager.get_one("user_settings", "user_id = ?", (1,))
-    # print(result)
-
-    # await db_manager.update("user_settings", {"volume": 50}, "user_id = ?", (1,))
-
-    # result = await db_manager.get_one("user_settings", "user_id = ?", (1,))
-    # print(result)
-
-    # await db_manager.insert("playlists", [{"user_id": 1, "name": "test", "is_public": True}], mode="ignore")
-
-    await db_manager.insert(
-        "playlists", [{"user_id": 1, "name": "test", "is_public": True}], mode="upsert", conflict_columns=["name"]
-    )
-
-    result = await db_manager.get("playlists")
-    print(result)
-    # results = await db_manager.get("playlists", "user_id = ?", (1,))
-    # playlists_name = []
-    # for result in results:
-    #     playlists_name.append(result[5])
-    # print(playlists_name)
-
+    #await on_setup_tables("test.db")
+    #db_manager = DatabaseManager("test.db")
+    
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -34,11 +34,17 @@ class MusicBot(commands.AutoShardedBot):
             await self.database.insert("guilds", [{"id": guild.id}], "ignore")
 
         # setup activity
+        # await self.change_presence(
+        #     activity=discord.Activity(
+        #         type=discord.ActivityType.watching, name="with more bugs"
+        #     ),
+        #     status=discord.Status.online,
+        # )
         await self.change_presence(
             activity=discord.Activity(
-                type=discord.ActivityType.watching, name="with more bugs"
+                type=discord.ActivityType.playing, name="⚠️Maintenance⚠️"
             ),
-            status=discord.Status.online,
+            status=discord.Status.dnd,
         )
 
     async def setup_hook(self):
