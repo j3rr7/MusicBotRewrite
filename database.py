@@ -1,5 +1,6 @@
 import duckdb
 import asyncio
+import datetime
 from typing import List, Dict, Any, Optional
 
 
@@ -143,25 +144,25 @@ class DatabaseManager:
         query = f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}"
         values = tuple(data.values()) + (where_params or ())
         await self.query(query, values)
+    
+    # async def update(
+    #     self,
+    #     table_name: str,
+    #     data: Dict,
+    #     where_clause: str,
+    #     where_params: Optional[tuple] = None,
+    #     exclude_keys: Optional[List[str]] = None,
+    # ):
+    #     """Updates data in a table, optionally excluding specific keys."""
 
-    async def update(
-        self,
-        table_name: str,
-        data: Dict,
-        where_clause: str,
-        where_params: Optional[tuple] = None,
-        exclude_keys: Optional[List[str]] = None,
-    ):
-        """Updates data in a table, optionally excluding specific keys."""
+    #     exclude_keys = exclude_keys or []
+    #     filtered_data = {k: v for k, v in data.items() if k not in exclude_keys}
 
-        exclude_keys = exclude_keys or []
-        filtered_data = {k: v for k, v in data.items() if k not in exclude_keys}
+    #     set_clause = ", ".join([f"{key} = ?" for key in filtered_data])
+    #     query = f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}"
+    #     values = tuple(filtered_data.values()) + (where_params or ())
 
-        set_clause = ", ".join([f"{key} = ?" for key in filtered_data])
-        query = f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}"
-        values = tuple(filtered_data.values()) + (where_params or ())
-
-        await self.query(query, values)
+    #     await self.query(query, values)
 
     async def delete(
         self, table_name: str, where_clause: str, where_params: Optional[tuple] = None
@@ -243,10 +244,17 @@ CREATE TABLE IF NOT EXISTS tracks (
 
 
 async def main():
-    await on_setup_tables("database.db")
-    #await on_setup_tables("test.db")
-    #db_manager = DatabaseManager("test.db")
-    
+    #await on_setup_tables("database.db")
+    await on_setup_tables("test.db")
+    db_manager = DatabaseManager("test.db")
+    # await db_manager.insert("playlists", [{"name": "test"}], mode="ignore")
+    # print(await db_manager.get("playlists"))
+    await db_manager.insert("tracks", [{"playlist_id": "fb982471-e7bd-4b29-9b86-1d5f2c4bb3b9", "url": "https://www.youtube.com/watch?v=2qyv0tDjKUo", "title": "test", "artist": "test", "duration": 1000, "position": 1}])
+    print(await db_manager.query("SELECT MAX(position) FROM tracks WHERE playlist_id = ?", ("fb982471-e7bd-4b29-9b86-1d5f2c4bb3b9",)))
+    # with duckdb.connect(":memory:") as conn:
+    #     conn.sql("CREATE TABLE temp1  ( id UUID PRIMARY KEY DEFAULT uuid(), name TEXT, position INTEGER, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ) ")
+    #     conn.sql("SELECT MAX(position) FROM temp1")
+    #     conn.sql("DROP TABLE temp1")
 
 if __name__ == "__main__":
     asyncio.run(main())

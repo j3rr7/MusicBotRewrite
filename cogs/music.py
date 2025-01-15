@@ -4,17 +4,22 @@ import wavelink
 import logging
 import discord
 import traceback
+import datetime
 from database import DatabaseManager
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from typing import Optional, List
 from views.queue import QueueView
+from views.playlist import PlaylistListView
 from config import ADMIN_IDS
 
 
 class Music(commands.Cog):
     playlist_group = app_commands.Group(
         name="playlist", description="Playlist commands", guild_only=True
+    )
+    playlist_song = app_commands.Group(
+        name="song", description="Song commands", guild_only=True
     )
 
     def __init__(self, bot: commands.AutoShardedBot):
@@ -70,9 +75,6 @@ class Music(commands.Cog):
             # close and terminate all connection
             await wavelink.node.Pool.close()
 
-            # self.nodes.clear()
-            # this default should be enough
-            # TODO: maybe remove this
             # self.nodes.append(
             #     wavelink.Node(
             #         uri="http://localhost:2333",
@@ -82,20 +84,20 @@ class Music(commands.Cog):
             # )
 
             # add some public nodes
-            self.nodes.append(
-                wavelink.Node(
-                    uri="https://lavalink.alfari.id:443",
-                    identifier="Catfein DE",
-                    password="catfein",
-                )
-            )
-            self.nodes.append(
-                wavelink.Node(
-                    uri="https://lava-v4.ajieblogs.eu.org:443",
-                    identifier="Public Lavalink v4",
-                    password="https://dsc.gg/ajidevserver",
-                )
-            )
+            # self.nodes.append(
+            #     wavelink.Node(
+            #         uri="https://lavalink.alfari.id:443",
+            #         identifier="Catfein DE",
+            #         password="catfein",
+            #     )
+            # )
+            # self.nodes.append(
+            #     wavelink.Node(
+            #         uri="https://lava-v4.ajieblogs.eu.org:443",
+            #         identifier="Public Lavalink v4",
+            #         password="https://dsc.gg/ajidevserver",
+            #     )
+            # )
 
             await wavelink.node.Pool.connect(
                 nodes=self.nodes, client=self.bot, cache_capacity=100
@@ -654,42 +656,72 @@ class Music(commands.Cog):
         player.queue.clear()
         await interaction.response.send_message("Queue cleared", ephemeral=True)
 
+    # =========================
+    # Playlist
+    # =========================
+
     @playlist_group.command(name="list", description="Lists of saved playlists.")
     @app_commands.describe(member="Playlist owner")
-    async def playlist_list(self, interaction: discord.Interaction, member: discord.Member = None):
+    async def playlist_list(
+        self, interaction: discord.Interaction, member: discord.Member = None
+    ):
         await interaction.response.defer()
 
         try:
-            playlists = await self.database.get("playlists")
-            messages = ""
+            if member:
+                playlists = await self.database.get(
+                    "playlists", f"user_id = ? AND is_public = 1", (member.id,)
+                )
 
-            await interaction.followup.send(messages, ephemeral=True)
+                view = PlaylistListView(playlists)
+                await interaction.followup.send(embed=view.create_embed(), view=view)
+            else:
+                # TODO: Edit This
+                # playlists = await self.database.get("playlists")
+                # await interaction.followup.send(
+                #     "Unable to get playlists globally, use tag instead", ephemeral=True
+                # )
+                playlists = await self.database.get(
+                    "playlists", f"user_id = ?", (interaction.user.id,)
+                )
+                view = PlaylistListView(playlists)
+                await interaction.followup.send(embed=view.create_embed(), view=view)
         except Exception as e:
             await interaction.followup.send(
                 f"Failed to list playlists: {e}", ephemeral=True
             )
 
     @playlist_group.command(name="create", description="Creates a playlist.")
-    @app_commands.describe(name="The name of the playlist.", public="Whether the playlist is shown to other users.")
-    async def playlist_create(self, interaction: discord.Interaction, name: str, public: bool = True):
+    @app_commands.describe(
+        name="The name of the playlist.",
+        public="Whether the playlist is shown to other users.",
+    )
+    async def playlist_create(
+        self, interaction: discord.Interaction, name: str, public: bool = True
+    ):
         await interaction.response.defer(ephemeral=True)
 
         try:
             await self.database.insert(
                 "playlists",
-                [{"name": name, "user_id": interaction.user.id, "is_public": bool(public)}],
-                mode="upsert",
-                conflict_columns=["name"],
+                [
+                    {
+                        "name": name,
+                        "user_id": interaction.user.id,
+                        "is_public": bool(public),
+                    }
+                ],
+                mode="ignore",
             )
             await interaction.followup.send(
-                f"Playlist '{name}' created, use '/playlist add' to add tracks or '/playlist current' to insert current queue into playlist",
+                f"Playlist '{name}' created, use '/song add' to add songs or '/song current' to insert current queue into playlist",
                 ephemeral=True,
             )
         except Exception as e:
             await interaction.followup.send(
                 f"Failed to create playlist: {e}", ephemeral=True
             )
-    
+
     @playlist_group.command(name="rename", description="Renames a playlist.")
     @app_commands.describe(
         playlist_name="The name of the playlist.",
@@ -698,57 +730,227 @@ class Music(commands.Cog):
     async def playlist_rename(
         self, interaction: discord.Interaction, playlist_name: str, new_name: str
     ):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         try:
             # get playlist with that name
-            playlist = self.database.get_one("playlists", "name = ?, user_id = ?", (playlist_name, interaction.user.id))
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (playlist_name, interaction.user.id),
+            )
+
             if not playlist:
                 await interaction.followup.send(
                     f"Playlist '{playlist_name}' not found", ephemeral=True
                 )
                 return
-            
+
             # check ownership
-            if int(playlist[2]) != interaction.user.id:
+            if int(playlist[1]) != interaction.user.id:
                 await interaction.followup.send(
                     f"Playlist '{playlist_name}' is not owned by you", ephemeral=True
+                )
+                return
+
+            # check if new_name is same as old_name
+            if playlist_name == new_name:
+                await interaction.followup.send(
+                    "New name cannot be the same as old name", ephemeral=True
+                )
+                return
+
+            # check if new_name already exists
+            if await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (new_name, interaction.user.id),
+            ):
+                await interaction.followup.send(
+                    f"Playlist with '{new_name}' already exists", ephemeral=True
                 )
                 return
 
             # update playlist
             await self.database.update(
                 "playlists",
-                {"name": new_name, "updated_at": "CURRENT_TIMESTAMP()"},
-                "name = ? AND user_id = ? AND id = ?",
-                (playlist_name, interaction.user.id, playlist[0]),
-                exclude_keys=["id"],
+                {
+                    "name": new_name,
+                    "updated_at": datetime.datetime.now(
+                        datetime.timezone(datetime.timedelta(hours=7))
+                    ),
+                },
+                "id = ?",
+                (playlist[0],),
+            )
+
+            await interaction.followup.send(
+                f"Playlist '{playlist_name}' renamed to '{new_name}'", ephemeral=True
             )
         except Exception as e:
             await interaction.followup.send(
                 f"Failed to rename playlist: {e}", ephemeral=True
             )
 
-        await interaction.followup.send(
-            f"Playlist '{playlist_name}' renamed to '{new_name}'", ephemeral=True
-        )
-
     @playlist_group.command(name="delete", description="Remove a playlist.")
     @app_commands.describe(playlist_name="The name of the playlist.")
-    async def playlist_delete(self, interaction: discord.Interaction, playlist_name: str):
+    async def playlist_delete(
+        self, interaction: discord.Interaction, playlist_name: str
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (playlist_name, interaction.user.id),
+            )
+            if not playlist:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' not found", ephemeral=True
+                )
+                return
+
+            # check ownership
+            if int(playlist[1]) != interaction.user.id:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' is not owned by you", ephemeral=True
+                )
+                return
+
+            # delete playlist
+            await self.database.delete(
+                "playlists",
+                "id = ?",
+                (playlist[0],),
+            )
+
+            # TODO: delete all playlist songs
+
+            await interaction.followup.send(
+                f"Deleted playlist '{playlist_name}', use '/playlist list' to see all your playlists ",
+                ephemeral=True,
+            )
+        except Exception as e:
+            await interaction.followup.send(
+                f"Failed to delete playlist: {e}", ephemeral=True
+            )
+
+    @playlist_group.command(name="view", description="Views a playlist.")
+    @app_commands.describe(
+        member="The member to view the playlist for. (Optional)",
+        playlist_name="The name of the playlist.",
+    )
+    async def playlist_view(
+        self,
+        interaction: discord.Interaction,
+        playlist_name: str,
+        member: discord.Member = None,
+    ):
         await interaction.response.defer()
 
+        if member:
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ? AND is_public = 1",
+                (playlist_name, member.id),
+            )
+        else:
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (playlist_name, interaction.user.id),
+            )
 
+        if not playlist:
+            await interaction.followup.send(
+                f"Playlist '{playlist_name}' not found", ephemeral=True
+            )
+            return
 
-    @playlist_rename.autocomplete(name="playlist_name")
-    async def playlist_rename_playlistname_autocomplete(self, interaction: discord.Interaction) -> List[app_commands.Choice[str]]:
+        tracks = await self.database.get("tracks", "playlist_id = ?", (playlist[0],))
+
+        if not tracks or tracks.count() == 0:
+            await interaction.followup.send(
+                f"Playlist '{playlist_name}' is empty", ephemeral=True
+            )
+            return
+
+        self.logger.info(tracks)
+
+        # view = PlaylistMemberView(tracks, playlist_name)
+        await interaction.followup.send("check log")
+        # await interaction.followup.send(embed=view.get_embed(), view=view)
+
+    # TODO: a lot of implementation here
+
+    @playlist_group.command(name="export", description="Exports a playlist.")
+    @app_commands.describe(
+        playlist_name="The name of the playlist.",
+        extension="The extension of the file.",
+    )
+    async def playlist_export(
+        self, interaction: discord.Interaction, playlist_name: str, extension: str
+    ):
+        await interaction.response.defer()
+
         try:
-            return [app_commands.Choice(name=playlist[0], value=playlist[0]) for playlist in await self.database.get("playlists", "user_id = ?", (interaction.user.id,))]
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (playlist_name, interaction.user.id),
+            )
+
+            if not playlist:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' not found", ephemeral=True
+                )
+                return
+            
+            await interaction.followup.send(
+                f"not implemented yet"
+            )
         except Exception as e:
-            return []
+            await interaction.followup.send(
+                f"Failed to export playlist: {e}", ephemeral=True
+            )
+            return
 
+        await interaction.followup.send(
+            f"Playlist '{playlist_name}' shared", ephemeral=True
+        )
 
-    @playlist_group.command(
+    @playlist_group.command(name="import", description="Imports a playlist.")
+    async def playlist_import(
+        self, interaction: discord.Interaction, playlist_name: str = "Imported Playlist"
+    ):
+        await interaction.response.defer(ephemeral=True)
+        
+        # if interaction.message.attachments:
+            # TODO: implement this
+        
+        await interaction.followup.send(
+            "not implemented yet", ephemeral=True
+        )
+
+    # TODO: implement this
+    @playlist_group.command(name="play", description="Plays a playlist.")
+    @app_commands.describe(playlist_name="The name of the playlist.")
+    async def playlist_play(self, interaction: discord.Interaction, playlist_name: str):
+        await interaction.response.defer(ephemeral=True)
+
+        # insert everything into queue
+
+        await interaction.followup.send(
+            "not implemented yet", ephemeral=True
+        )
+    
+    # =========================
+    # SONG
+    # =========================
+
+    # TODO: Check again
+    @playlist_song.command(
         name="current", description="Inserts the current queue into a playlist."
     )
     @app_commands.describe(playlist_name="The name of the playlist.")
@@ -799,69 +1001,351 @@ class Music(commands.Cog):
             f"Current queue inserted into playlist '{playlist_name}'", ephemeral=True
         )
 
-    @playlist_group.command(name="view", description="Views a playlist.")
-    @app_commands.describe(playlist_name="The name of the playlist.")
-    async def playlist_view(self, interaction: discord.Interaction, playlist_name: str):
-        await interaction.response.defer()
-        # TODO: implement view playlist
-        await interaction.followup.send(
-            f"Viewing playlist '{playlist_name}'", ephemeral=True
-        )
-
-    @playlist_group.command(name="add", description="Adds a track to a playlist.")
-    @app_commands.describe(
-        playlist_name="The name of the playlist.", track_url="The URL of the track."
+    @playlist_song.command(
+        name="add",
+        description="Adds a track to a playlist using either track URL or title",
     )
-    async def playlist_add(
-        self, interaction: discord.Interaction, playlist_name: str, track_url: str
-    ):
-        await interaction.response.defer()
-
-        # TODO: Implement add track to playlist
-        # await self.database.insert(
-        #     "tracks",
-        #     [{"playlist_id": playlist_name, "url": track_url}],
-        #     mode="replace",
-        # )
-
-        await interaction.followup.send(
-            f"Track added to playlist '{playlist_name}'", ephemeral=True
-        )
-
-    @playlist_group.command(name="append", description="Appends a track to a playlist.")
     @app_commands.describe(
-        playlist_name="The name of the playlist.",
-        track_url="The URL of the track.",
-        position="Position to append the track.",
+        playlist_name="The name of the playlist",
+        song_url="The URL of the song (optional if title is provided)",
+        song_title="The title of the song (optional if URL is provided)",
     )
-    async def playlist_append(
+    async def song_add(
         self,
         interaction: discord.Interaction,
         playlist_name: str,
-        track_url: str,
-        position: int,
+        song_url: Optional[str] = None,
+        song_title: Optional[str] = None,
     ):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
-        # TODO: Implement append track to playlist
-        await interaction.followup.send("Append track to playlist", ephemeral=True)
+        # verify that at least one of song_url or song_title is provided
+        if song_url is None and song_title is None:
+            await interaction.followup.send(
+                "You must provide either a song URL or a song title!", ephemeral=True
+            )
+            return
 
-    @playlist_group.command(
+        try:
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (playlist_name, interaction.user.id),
+            )
+
+            if not playlist:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' not found", ephemeral=True
+                )
+                return
+
+            # check ownership
+            if int(playlist[1]) != interaction.user.id:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' is not owned by you", ephemeral=True
+                )
+                return
+
+            if song_url:
+                max_position = await self.database.query(
+                    "SELECT MAX(position) FROM tracks WHERE playlist_id = ?",
+                    (playlist[0],),
+                )[0]
+                new_position = 0 if max_position is None else max_position + 1
+
+                await self.database.insert(
+                    "tracks",
+                    [
+                        {
+                            "playlist_id": playlist[0],
+                            "url": song_url,
+                            "title": song_title if song_title else "Unknown Title",
+                            "artist": "Unknown Artist",
+                            "duration": 0,
+                            "position": new_position,
+                        }
+                    ],
+                    mode="ignore",
+                )
+
+                await interaction.followup.send(
+                    f"Song added to playlist '{playlist_name}'", ephemeral=True
+                )
+            else:
+                song_tracks = await wavelink.Playable.search(song_title)
+
+                if not song_tracks:
+                    await interaction.followup.send(
+                        f"Could not find a track with the title '{song_title}'",
+                        ephemeral=True,
+                    )
+                    return
+
+                song_url = song_tracks[0].uri
+                song_duration = song_tracks[0].length
+                song_artist = (
+                    "" if song_tracks[0].artist is None else song_tracks[0].artist.url
+                )
+
+                max_position = await self.database.query(
+                    "SELECT MAX(position) FROM tracks WHERE playlist_id = ?",
+                    (playlist[0],),
+                )[0]
+                new_position = 0 if max_position is None else max_position + 1
+
+                await self.database.insert(
+                    "tracks",
+                    [
+                        {
+                            "playlist_id": playlist[0],
+                            "url": song_url,
+                            "title": song_title,
+                            "artist": song_artist,
+                            "duration": song_duration,
+                            "position": new_position,
+                        }
+                    ],
+                    mode="ignore",
+                )
+
+                await interaction.followup.send(
+                    f"Song [**{song_title}**]({song_url}) added to playlist '{playlist_name}'",
+                    ephemeral=True,
+                )
+        except Exception as e:
+            await interaction.followup.send(
+                f"Failed to add track to playlist: {e}", ephemeral=True
+            )
+
+    @playlist_song.command(
         name="remove", description="Removes a track from a playlist."
     )
     @app_commands.describe(
         playlist_name="The name of the playlist.",
         index="The index of the track in the playlist.",
     )
-    async def playlist_remove(
+    async def song_remove(
         self, interaction: discord.Interaction, playlist_name: str, index: int
     ):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
-        # TODO: Implement remove track from playlist
+        # make index human readable and easier to read/understand show index as 1-indexed
+        if index <= 0:
+            await interaction.followup.send(
+                "Index must be greater than 0", ephemeral=True
+            )
+            return
 
-        await interaction.followup.send("Remove track from playlist", ephemeral=True)
-    
+        # decrement index
+        index -= 1
+
+        try:
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (playlist_name, interaction.user.id),
+            )
+
+            if not playlist:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' not found", ephemeral=True
+                )
+                return
+
+            # check ownership
+            if int(playlist[1]) != interaction.user.id:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' is not owned by you", ephemeral=True
+                )
+
+                return
+
+            # recount positions
+            await self.database.query(
+                "UPDATE tracks SET position = position - 1 WHERE playlist_id = ? AND position > ?",
+                (playlist[0], index),
+            )
+
+            # delete track
+            await self.database.delete(
+                "tracks",
+                "playlist_id = ? AND position = ?",
+                (playlist[0], index),
+            )
+
+            await interaction.followup.send(
+                f"Song removed from playlist '{playlist_name}'", ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(
+                f"Failed to remove track from playlist: {e}", ephemeral=True
+            )
+            return
+
+    @playlist_song.command(name="move", description="Moves a track in a playlist.")
+    @app_commands.describe(
+        playlist_name="The name of the playlist.",
+        index="The index of the track in the playlist.",
+        mode="The mode to move the track in the playlist.",
+        target="The target index of the track in the playlist.",
+    )
+    @app_commands.choices(
+        mode=[
+            app_commands.Choice(name="before", value="before"),
+            app_commands.Choice(name="after", value="after"),
+        ]
+    )
+    async def song_move(
+        self,
+        interaction: discord.Interaction,
+        playlist_name: str,
+        index: int,
+        target: int,
+        mode: str = "before",
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        # make index human readable and easier to read/understand show index as 1-indexed
+        if index <= 0:
+            await interaction.followup.send(
+                "Index must be greater than 0", ephemeral=True
+            )
+            return
+
+        # decrement index
+        index -= 1
+
+        try:
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (playlist_name, interaction.user.id),
+            )
+
+            if not playlist:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' not found", ephemeral=True
+                )
+                return
+
+            # check ownership
+            if int(playlist[1]) != interaction.user.id:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' is not owned by you", ephemeral=True
+                )
+                return
+
+            # recount positions
+            if mode == "before":
+                await self.database.query(
+                    "UPDATE tracks SET position = position - 1 WHERE playlist_id = ? AND position > ?",
+                    (playlist[0], index),
+                )
+            elif mode == "after":
+                await self.database.query(
+                    "UPDATE tracks SET position = position + 1 WHERE playlist_id = ? AND position >= ?",
+                    (playlist[0], target),
+                )
+            else:
+                await interaction.followup.send("Invalid mode", ephemeral=True)
+                return
+
+            # move track
+            await self.database.update(
+                "tracks",
+                {"position": target},
+                "playlist_id = ? AND position = ?",
+                (playlist[0], index),
+            )
+
+            await interaction.followup.send(
+                f"Song moved in playlist '{playlist_name}' from index {index} to index {target}",
+                ephemeral=True,
+            )
+        except Exception as e:
+            await interaction.followup.send(
+                f"Failed to move track: {e}", ephemeral=True
+            )
+            return
+
+    @playlist_song.command(
+        name="clear", description="Clears the playlist of all tracks."
+    )
+    @app_commands.describe(playlist_name="The name of the playlist.")
+    async def song_clear(self, interaction: discord.Interaction, playlist_name: str):
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (playlist_name, interaction.user.id),
+            )
+
+            if not playlist:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' not found", ephemeral=True
+                )
+                return
+
+            # check ownership
+            if int(playlist[1]) != interaction.user.id:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' is not owned by you", ephemeral=True
+                )
+                return
+
+            # clear all tracks
+            await self.database.delete(
+                "tracks",
+                "playlist_id = ?",
+                (playlist[0],),
+            )
+
+            await interaction.followup.send(
+                f"Playlist '{playlist_name}' cleared", ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(
+                f"Failed to clear playlist: {e}", ephemeral=True
+            )
+            return
+
+    @playlist_song.command(name="shuffle", description="Shuffles the playlist.")
+    @app_commands.describe(playlist_name="The name of the playlist.")
+    async def song_shuffle(self, interaction: discord.Interaction, playlist_name: str):
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (playlist_name, interaction.user.id),
+            )
+
+            if not playlist:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' not found", ephemeral=True
+                )
+                return
+
+            # check ownership
+            if int(playlist[1]) != interaction.user.id:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' is not owned by you", ephemeral=True
+                )
+                return
+
+            # shuffle playlist, but make sure positions are correct
+            await self.database.query("")
+
+            await interaction.followup.send(
+                f"Playlist '{playlist_name}' shuffled", ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(f"Error: {e}", ephemeral=True)
+            return
+
     async def cog_app_command_error(
         self,
         interaction: discord.Interaction[discord.Client],
