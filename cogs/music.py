@@ -76,29 +76,29 @@ class Music(commands.Cog):
             # close and terminate all connection
             await wavelink.node.Pool.close()
 
-            # self.nodes.append(
-            #     wavelink.Node(
-            #         uri="http://localhost:2333",
-            #         identifier="Local Lavalink",
-            #         password="youshallnotpass",
-            #     )
-            # )
+            self.nodes.append(
+                wavelink.Node(
+                    uri="http://localhost:2333",
+                    identifier="Local Lavalink",
+                    password="youshallnotpass",
+                )
+            )
 
             # add some public nodes
-            self.nodes.append(
-                wavelink.Node(
-                    uri="https://lavalink.alfari.id:443",
-                    identifier="Catfein DE",
-                    password="catfein",
-                )
-            )
-            self.nodes.append(
-                wavelink.Node(
-                    uri="https://lava-v4.ajieblogs.eu.org:443",
-                    identifier="Public Lavalink v4",
-                    password="https://dsc.gg/ajidevserver",
-                )
-            )
+            # self.nodes.append(
+            #     wavelink.Node(
+            #         uri="https://lavalink.alfari.id:443",
+            #         identifier="Catfein DE",
+            #         password="catfein",
+            #     )
+            # )
+            # self.nodes.append(
+            #     wavelink.Node(
+            #         uri="https://lava-v4.ajieblogs.eu.org:443",
+            #         identifier="Public Lavalink v4",
+            #         password="https://dsc.gg/ajidevserver",
+            #     )
+            # )
 
             await wavelink.node.Pool.connect(
                 nodes=self.nodes, client=self.bot, cache_capacity=100
@@ -572,7 +572,7 @@ class Music(commands.Cog):
 
         # database update
         try:
-            self.database.update(
+            await self.database.update(
                 "user_settings",
                 {"volume": volume},
                 f"user_id = ?",
