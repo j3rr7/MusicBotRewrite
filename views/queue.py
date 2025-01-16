@@ -7,7 +7,9 @@ from typing import List, Any
 
 
 class QueueView(View):
-    def __init__(self, player: wavelink.Player, interaction: discord.Interaction) -> None:
+    def __init__(
+        self, player: wavelink.Player, interaction: discord.Interaction
+    ) -> None:
         super().__init__(timeout=180)
         self.player = player
         self.current_page = 0
@@ -48,7 +50,7 @@ class QueueView(View):
     async def on_timeout(self) -> None:
         for item in self.children:
             item.disabled = True
-        self.interaction.edit_original_response("View timed out",view=self)
+        self.interaction.edit_original_response("View timed out", view=self)
 
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.gray)
     async def previous_button(

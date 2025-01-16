@@ -8,6 +8,7 @@ from discord.ext import commands, tasks
 from logging.handlers import RotatingFileHandler
 from typing import Union
 
+
 log_handler = RotatingFileHandler(
     "discord.log", maxBytes=5 * 1024 * 1024, backupCount=5, encoding="utf-8", mode="w"
 )  # 5Mb, 5 backups
@@ -34,18 +35,19 @@ class MusicBot(commands.AutoShardedBot):
             await self.database.insert("guilds", [{"id": guild.id}], "ignore")
 
         # setup activity
-        # await self.change_presence(
-        #     activity=discord.Activity(
-        #         type=discord.ActivityType.watching, name="with more bugs"
-        #     ),
-        #     status=discord.Status.online,
-        # )
         await self.change_presence(
             activity=discord.Activity(
-                type=discord.ActivityType.playing, name="⚠️Maintenance⚠️"
+                type=discord.ActivityType.playing, name="BETA v1.0.0 | /issues | /help"
             ),
-            status=discord.Status.dnd,
+            status=discord.Status.online,
         )
+
+        # await self.change_presence(
+        #     activity=discord.Activity(
+        #         type=discord.ActivityType.playing, name="⚠️Maintenance⚠️"
+        #     ),
+        #     status=discord.Status.dnd,
+        # )
 
     async def setup_hook(self):
         for file in self.cog_extensions:
@@ -55,10 +57,6 @@ class MusicBot(commands.AutoShardedBot):
         self.tree.copy_global_to(guild=guild)
         synced = await self.tree.sync(guild=guild)
         logger.info(f"Synced {len(synced)} global commands")
-
-    @discord.app_commands.command(name="help", description="Get help")
-    async def help(self, interaction: discord.Interaction):
-        await interaction.response.send_message("Help")
 
 
 if __name__ == "__main__":
