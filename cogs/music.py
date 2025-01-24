@@ -1047,10 +1047,11 @@ class Music(commands.Cog):
                 )
                 return
 
-            max_position = await self.database.query(
+            max_position_query = await self.database.query(
                 "SELECT MAX(position) FROM tracks WHERE playlist_id = ?",
                 (playlist[0],),
-            )[0]
+            )
+            max_position = max_position_query[0]
             new_position = 0 if max_position is None else max_position + 1
 
             if player.playing:
