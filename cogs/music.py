@@ -41,8 +41,6 @@ class Music(commands.Cog):
     async def cog_unload(self):
         self.logger.info("Music cog unloaded")
 
-        await wavelink.Node.close(eject=True)
-
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
         self.logger.info(
