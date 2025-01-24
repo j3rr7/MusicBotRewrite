@@ -1,7 +1,7 @@
 import logging
 import traceback
 import discord
-from config import DISCORD_TOKEN, DEBUG_GUILD_ID
+from config import DISCORD_TOKEN, DISCORD_TOKEN_DEV, DEBUG_GUILD_ID
 from database import DatabaseManager
 from pathlib import Path
 from discord.ext import commands, tasks
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 class MusicBot(commands.AutoShardedBot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.debug_mode = False  
         self.database = DatabaseManager("database.db")
         self.cog_extensions: list[Path] = [
             file for file in Path("cogs").rglob("*.py") if not file.stem.startswith("_")
@@ -35,28 +36,30 @@ class MusicBot(commands.AutoShardedBot):
             await self.database.insert("guilds", [{"id": guild.id}], "ignore")
 
         # setup activity
-        await self.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.playing, name="BETA v1.0.0 | /issues | /help"
-            ),
-            status=discord.Status.online,
-        )
-
-        # await self.change_presence(
-        #     activity=discord.Activity(
-        #         type=discord.ActivityType.playing, name="⚠️Maintenance⚠️"
-        #     ),
-        #     status=discord.Status.dnd,
-        # )
+        if self.debug_mode:
+            await self.change_presence(
+                activity=discord.Activity(
+                    type=discord.ActivityType.playing, name="⚠️Maintenance⚠️ MODE | /issues | /help"
+                ),
+                status=discord.Status.dnd,
+            )
+        else:
+            await self.change_presence(
+                activity=discord.Activity(
+                    type=discord.ActivityType.playing, name="BETA v1.0.0 | /issues | /help"
+                ),
+                status=discord.Status.online,
+            )
 
     async def setup_hook(self):
         for file in self.cog_extensions:
             await self.load_extension(".".join(file.with_suffix("").parts))
 
-        guild = discord.Object(id=DEBUG_GUILD_ID)
-        self.tree.copy_global_to(guild=guild)
-        synced = await self.tree.sync(guild=guild)
-        logger.info(f"Synced {len(synced)} global commands")
+        if self.debug_mode:
+            guild = discord.Object(id=DEBUG_GUILD_ID)
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            logger.info(f"Synced {len(synced)} global commands")
 
 
 if __name__ == "__main__":
@@ -67,7 +70,7 @@ if __name__ == "__main__":
         description="Listen to your heartbeat",
     )
     bot.run(
-        DISCORD_TOKEN,
+        DISCORD_TOKEN_DEV if bot.debug_mode else DISCORD_TOKEN,
         log_handler=log_handler,
         log_formatter=formatter,
         log_level=logging.INFO,

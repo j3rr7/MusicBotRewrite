@@ -110,16 +110,16 @@ class Music(commands.Cog):
     async def send_interaction_message(
         interaction: discord.Interaction,
         content: str,
-        ephemeral: Optional[bool] = False,
+        as_ephemeral: Optional[bool] = False,
     ):
         """Use this if unsure whether the interaction is deferred or not."""
         try:
-            await interaction.response.send_message(content, ephemeral=ephemeral)
+            await interaction.response.send_message(content, ephemeral=as_ephemeral)
         except discord.errors.InteractionResponded:
-            await interaction.followup.send(content, ephemeral=ephemeral)
+            await interaction.followup.send(content, ephemeral=as_ephemeral)
 
     async def try_connect_voice(
-        self, interaction: discord.Interaction, as_ephemeral: Optional[bool] = False
+        self, interaction: discord.Interaction, is_ephemeral: Optional[bool] = False
     ) -> Optional[wavelink.Player]:
         """Attempts to connect to the voice channel the user is in."""
         try:
@@ -130,7 +130,7 @@ class Music(commands.Cog):
                 await self.send_interaction_message(
                     interaction,
                     "You are not in a voice channel.",
-                    ephemeral=as_ephemeral,
+                    as_ephemeral=is_ephemeral,
                 )
                 return
 
@@ -142,7 +142,7 @@ class Music(commands.Cog):
         except discord.ClientException as e:
             self.logger.warning(f"Unable to join voice channel: {e}")
             await self.send_interaction_message(
-                interaction, "Unable to join voice channel.", ephemeral=as_ephemeral
+                interaction, "Unable to join voice channel.", as_ephemeral=is_ephemeral
             )
 
         except Exception as e:
@@ -150,7 +150,7 @@ class Music(commands.Cog):
             await self.send_interaction_message(
                 interaction,
                 "An error occurred while joining voice channel.",
-                ephemeral=as_ephemeral,
+                as_ephemeral=is_ephemeral,
             )
 
     def convert_timestamp_to_milliseconds(timestamp: str) -> int:
@@ -827,6 +827,10 @@ class Music(commands.Cog):
             )
 
             # TODO: delete all playlist songs
+            await self.database.delete(
+                "tracks",
+                "playlist_id = ?", (playlist[0],),
+            )
 
             await interaction.followup.send(
                 f"Deleted playlist '{playlist_name}', use '/playlist list' to see all your playlists ",

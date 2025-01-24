@@ -4,6 +4,7 @@ import pathlib
 import traceback
 from discord import app_commands
 from discord.ext import commands
+from modals.admin import EvalModal
 from config import ADMIN_IDS
 
 
@@ -27,6 +28,40 @@ class Admin(commands.Cog):
         await interaction.response.send_message(
             "Slash commands synced.", ephemeral=True
         )
+
+    @app_commands.command(name="eval", description="Evaluates code.")
+    async def eval(self, interaction: discord.Interaction):
+        if hasattr(self.bot, "database"):
+            code_modal = EvalModal(title="Evaluate Code", timeout=120)
+            await interaction.response.send_modal(code_modal)
+        else:
+            await interaction.response.send_message("Error: Database not found", ephemeral=True)
+
+    @app_commands.command(name="database", description="Database operations.")
+    @app_commands.describe(query="The query to execute.")
+    async def database(self, interaction: discord.Interaction, query: str = None):
+        await interaction.response.defer(ephemeral=True)
+
+        if hasattr(self.bot, "database"):
+            if query:
+                try:
+                    result = await self.bot.database.execute(query)
+
+                    if result:
+                        embed = discord.Embed(
+                            title=f"Database Result",
+                            description=f"{result}",
+                            color=discord.Color.blurple(),
+                            timestamp=discord.utils.utcnow(),
+                        )
+                        
+                        await interaction.followup.send(embed=embed)
+                except Exception as e:
+                    await interaction.followup.send(f"Error: {e}", ephemeral=True)
+            else:
+                await interaction.followup.send("Query is required.", ephemeral=True)
+        else:
+            await interaction.followup.send("Error: Database not found", ephemeral=True)
 
     @app_commands.command(
         name="prune", description="Deletes a number of messages. (max 100)"

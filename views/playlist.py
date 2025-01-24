@@ -86,13 +86,12 @@ class PlaylistTrackView(View):
         ):
             # Format track information
             track_line = (
-                f"{idx}. {track[3]}\n"
+                f"{idx}. [{track[3]}]({track[2] if track[2] else ""})\n"
                 # f"    └ Duration: {track.duration_str} | Added: <t:{int(track.added_at.timestamp())}:R>"
             )
             track_list.append(track_line)
 
-        tracks_text = "\n".join(track_list)
-        embed.description = f"```\n{tracks_text}\n```"
+        embed.description = "\n".join(track_list)
 
         embed.set_footer(text=f"Page {self.current_page + 1}/{self.page_count}")
 
