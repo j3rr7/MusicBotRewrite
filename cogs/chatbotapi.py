@@ -70,7 +70,7 @@ class ChatbotAPI(commands.Cog):
 
     @chatbot.autocomplete("model")
     async def chatbot_model_autocomplete(
-        self, interaction: app_commands.AppCommandInteraction, model: str
+        self, interaction: discord.Interaction, model: str
     ) -> List[app_commands.Choice[str]]:
         return [
             app_commands.Choice(model["name"])
