@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class MusicBot(commands.AutoShardedBot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.debug_mode = False  
+        self.debug_mode = False
         self.database = DatabaseManager("database.db")
         self.cog_extensions: list[Path] = [
             file for file in Path("cogs").rglob("*.py") if not file.stem.startswith("_")
@@ -39,14 +39,16 @@ class MusicBot(commands.AutoShardedBot):
         if self.debug_mode:
             await self.change_presence(
                 activity=discord.Activity(
-                    type=discord.ActivityType.playing, name="⚠️Maintenance⚠️ MODE | /issues | /help"
+                    type=discord.ActivityType.playing,
+                    name="⚠️Maintenance⚠️ MODE | /issues | /help",
                 ),
                 status=discord.Status.dnd,
             )
         else:
             await self.change_presence(
                 activity=discord.Activity(
-                    type=discord.ActivityType.playing, name="BETA v1.0.0 | /issues | /help"
+                    type=discord.ActivityType.playing,
+                    name="BETA v1.0.0 | /issues | /help",
                 ),
                 status=discord.Status.online,
             )

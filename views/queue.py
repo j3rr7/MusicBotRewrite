@@ -7,9 +7,7 @@ from typing import List, Any
 
 
 class QueueView(View):
-    def __init__(
-        self, player: wavelink.Player
-    ) -> None:
+    def __init__(self, player: wavelink.Player) -> None:
         super().__init__(timeout=180)
         self.player = player
         self.current_page = 0

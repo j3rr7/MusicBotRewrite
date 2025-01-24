@@ -32,10 +32,14 @@ class General(commands.Cog):
     @discord.app_commands.command(name="issue", description="Report an issue")
     async def issue(self, interaction: discord.Interaction):
         if hasattr(self.bot, "database"):
-            issue_modal = IssueModal(database=self.bot.database, title="Report an issue", timeout=120)
+            issue_modal = IssueModal(
+                database=self.bot.database, title="Report an issue", timeout=120
+            )
             await interaction.response.send_modal(issue_modal)
         else:
-            await interaction.response.send_message("Error: Database not found", ephemeral=True)
+            await interaction.response.send_message(
+                "Error: Database not found", ephemeral=True
+            )
 
     async def cog_app_command_error(self, interaction, error):
         self.logger.error(traceback.format_exc())

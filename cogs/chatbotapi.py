@@ -5,6 +5,7 @@ import discord
 import traceback
 from discord import app_commands
 from discord.ext import commands
+from typing import List
 
 """
 Thanks for
@@ -24,9 +25,6 @@ class ChatbotAPI(commands.Cog):
         self.models = json.loads(
             """[{"name":"openai","type":"chat","censored":true,"description":"OpenAI GPT-4o","baseModel":true},{"name":"qwen","type":"chat","censored":true,"description":"Qwen 2.5 72B","baseModel":true},{"name":"qwen-coder","type":"chat","censored":true,"description":"Qwen 2.5 Coder 32B","baseModel":true},{"name":"llama","type":"chat","censored":false,"description":"Llama 3.3 70B","baseModel":true},{"name":"mistral","type":"chat","censored":false,"description":"Mistral Nemo","baseModel":true},{"name":"unity","type":"chat","censored":false,"description":"Unity with Mistral Large by Unity AI Lab","baseModel":false},{"name":"midijourney","type":"chat","censored":true,"description":"Midijourney musical transformer","baseModel":false},{"name":"rtist","type":"chat","censored":true,"description":"Rtist image generator by @bqrio","baseModel":false},{"name":"searchgpt","type":"chat","censored":true,"description":"SearchGPT with realtime news and web search","baseModel":false},{"name":"evil","type":"chat","censored":false,"description":"Evil Mode - Experimental","baseModel":false},{"name":"p1","type":"chat","censored":false,"description":"Pollinations 1 (OptiLLM)","baseModel":false},{"name":"deepseek","type":"chat","censored":true,"description":"DeepSeek-V3","baseModel":true}]"""
         )
-        self.base_models = [
-            model["name"] for model in self.models if model["baseModel"]
-        ]
 
     @app_commands.command(
         name="chatbot",
@@ -52,7 +50,7 @@ class ChatbotAPI(commands.Cog):
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": f"{message}"},
                 ],
-                "model": "openai",
+                "model": model,
                 "seed": 0,
                 "temperature": temperature,
                 "jsonMode": False,
@@ -69,6 +67,18 @@ class ChatbotAPI(commands.Cog):
                         await interaction.followup.send(response_text)
                 else:
                     await interaction.followup.send(f"Error: {response.status}")
+
+    @chatbot.autocomplete("model")
+    async def chatbot_model_autocomplete(
+        self, interaction: app_commands.AppCommandInteraction, model: str
+    ) -> List[app_commands.Choice[str]]:
+        return [
+            app_commands.Choice(model["name"])
+            for model in self.models
+            if bool(model["baseModel"])
+            and model["type"] == "chat"
+            and str(model["name"]).startswith(model)
+        ]
 
     async def cog_app_command_error(
         self,

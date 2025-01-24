@@ -37,18 +37,24 @@ class Admin(commands.Cog):
             code_modal = EvalModal(title="Evaluate Code", timeout=120)
             await interaction.response.send_modal(code_modal)
         else:
-            await interaction.response.send_message("Error: Database not found", ephemeral=True)
+            await interaction.response.send_message(
+                "Error: Database not found", ephemeral=True
+            )
 
     @app_commands.command(name="lvstats", description="shows lavalinks stats")
     async def lvstats(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 
         try:
-            players: List[wavelink.PlayerResponsePayload] = await wavelink.Node.fetch_players()
+            players: List[wavelink.PlayerResponsePayload] = (
+                await wavelink.Node.fetch_players()
+            )
             stats: wavelink.StatsResponsePayload = await wavelink.Node.fetch_stats()
 
             if not players or not stats:
-                await interaction.followup.send("Unable to fetch lavalink stats", ephemeral=True)
+                await interaction.followup.send(
+                    "Unable to fetch lavalink stats", ephemeral=True
+                )
                 return
 
             # Format and display stats
@@ -62,7 +68,9 @@ class Admin(commands.Cog):
                 player_info = f"Player: {player.__str__()}\n"
                 player_info += f"Guild ID: {player.guild_id}\n"
                 player_info += f"Paused: {player.paused}\n"
-                player_info += f"State: {player.state.connected}, ping: {player.state.ping}\n"
+                player_info += (
+                    f"State: {player.state.connected}, ping: {player.state.ping}\n"
+                )
                 if player.track:
                     player_info += f"Track: {player.track.title}\n"
 

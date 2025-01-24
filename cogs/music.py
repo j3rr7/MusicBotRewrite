@@ -228,13 +228,14 @@ class Music(commands.Cog):
 
         if not tracks:
             await interaction.followup.send(
-                f"{interaction.user.mention} - Unable to find track.", ephemeral=True
+                f"I'm unable to find the requested song.", ephemeral=True
             )
             return
 
+        player.autoplay = autoplay
+
         if isinstance(tracks, wavelink.Playlist):
             added: int = await player.queue.put_wait(tracks)
-            # await self.send_interaction_message(f"Added the playlist **`{tracks.name}`** ({added} songs) to the queue.")
             embed = discord.Embed(
                 title="Playlist Added",
                 description=f"Added the playlist **`{tracks.name}`** ({added} songs) to the queue.",
@@ -257,8 +258,6 @@ class Music(commands.Cog):
             if track.artwork:
                 embed.set_thumbnail(url=track.artwork)
             await interaction.followup.send(embed=embed)
-
-        player.autoplay = autoplay
 
         if not player.playing:
             # Play now since we aren't playing anything...
@@ -818,7 +817,8 @@ class Music(commands.Cog):
             # TODO: delete all playlist songs
             await self.database.delete(
                 "tracks",
-                "playlist_id = ?", (playlist[0],),
+                "playlist_id = ?",
+                (playlist[0],),
             )
 
             await interaction.followup.send(
@@ -1005,9 +1005,7 @@ class Music(commands.Cog):
             )
             embed.set_footer(text=f"Requested by {interaction.user}")
 
-            await interaction.followup.send(
-                embed=embed, ephemeral=True
-            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
         except Exception as e:
             await interaction.followup.send(
@@ -1036,39 +1034,66 @@ class Music(commands.Cog):
             )
             return
 
-        playlist = await self.database.get_one(
-            "playlists",
-            "name = ? AND user_id = ?",
-            (playlist_name, interaction.user.id),
-        )
+        try:
+            playlist = await self.database.get_one(
+                "playlists",
+                "name = ? AND user_id = ?",
+                (playlist_name, interaction.user.id),
+            )
 
-        if not playlist:
+            if not playlist:
+                await interaction.followup.send(
+                    f"Playlist '{playlist_name}' not found", ephemeral=True
+                )
+                return
+
+            max_position = await self.database.query(
+                "SELECT MAX(position) FROM tracks WHERE playlist_id = ?",
+                (playlist[0],),
+            )[0]
+            new_position = 0 if max_position is None else max_position + 1
+
+            if player.playing:
+                track = player.current
+
+                await self.database.insert(
+                    "tracks",
+                    [
+                        {
+                            "playlist_id": playlist[0],
+                            "url": track.uri,
+                            "title": track.title,
+                            "artist": track.artist.url,
+                            "duration": track.length,
+                            "position": new_position,
+                        }
+                    ],
+                )
+
+            for i, track in enumerate(player.queue, start=new_position + 1):
+                await self.database.insert(
+                    "tracks",
+                    [
+                        {
+                            "playlist_id": playlist[0],
+                            "url": track.uri,
+                            "title": track.title,
+                            "artist": track.artist.url,
+                            "duration": track.length,
+                            "position": i,
+                        }
+                    ],
+                    mode="replace",
+                )
+
             await interaction.followup.send(
-                f"Playlist '{playlist_name}' not found", ephemeral=True
+                f"Current queue inserted into playlist '{playlist_name}'",
+                ephemeral=True,
             )
-            return
-
-        # TODO: append current playing track to playlist
-
-        for i, track in enumerate(player.queue):
-            await self.database.insert(
-                "tracks",
-                [
-                    {
-                        "playlist_id": playlist[0],
-                        "url": track.uri,
-                        "title": track.title,
-                        "artist": track.artist.url,
-                        "duration": track.length,
-                        "position": i,
-                    }
-                ],
-                mode="replace",
+        except Exception as e:
+            await interaction.followup.send(
+                f"Failed to insert current queue into playlist: {e}", ephemeral=True
             )
-
-        await interaction.followup.send(
-            f"Current queue inserted into playlist '{playlist_name}'", ephemeral=True
-        )
 
     @playlist_song.command(
         name="add",

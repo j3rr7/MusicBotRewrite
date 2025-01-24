@@ -251,9 +251,15 @@ CREATE TABLE IF NOT EXISTS issues (
 
 
 async def main():
-    await on_setup_tables("database.db")
-    await on_setup_tables("test.db")
-    db_manager = DatabaseManager("test.db")
+    # await on_setup_tables("database.db")
+    db_manager = DatabaseManager("database.db")
+    # await db_manager.query("SELECT * FROM guilds")
+    # await db_manager.query("SELECT * FROM members")
+    # await db_manager.query("SELECT * FROM user_settings")
+    # await db_manager.query("SELECT * FROM playlists")
+    # await db_manager.query("SELECT * FROM tracks")
+    print(await db_manager.query("SELECT * FROM issues"))
+
 
 if __name__ == "__main__":
     asyncio.run(main())

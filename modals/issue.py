@@ -1,5 +1,6 @@
 import traceback
 import discord
+import logging
 from discord import ui
 from database import DatabaseManager
 
@@ -8,6 +9,7 @@ class IssueModal(ui.Modal):
     def __init__(self, database: DatabaseManager, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.database = database
+        self.logger = logging.getLogger(__name__)
 
     issue = ui.TextInput(label="Describe Your Issue", style=discord.TextStyle.paragraph)
 
@@ -15,13 +17,8 @@ class IssueModal(ui.Modal):
         await interaction.response.defer(ephemeral=True)
 
         try:
-            # how do i get database from main ???? or self.bot.database ???
             await self.database.insert(
-                "issues",
-                [{
-                    "user_id": interaction.user.id,
-                    "issue": self.issue.value
-                }]
+                "issues", [{"user_id": interaction.user.id, "issue": self.issue.value}]
             )
 
             await interaction.followup.send(
@@ -40,6 +37,7 @@ class IssueModal(ui.Modal):
     async def on_error(
         self, interaction: discord.Interaction, error: Exception
     ) -> None:
+        self.logger.error(traceback.format_exc())
         tb = "".join(
             traceback.format_exception(type(error), error, error.__traceback__)
         )

@@ -1,20 +1,27 @@
 import traceback
 import discord
+import logging
 from discord import ui
 from database import DatabaseManager
+
 
 class EvalModal(ui.Modal):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.database = None
+        self.logger = logging.getLogger(__name__)
 
-    code = ui.TextInput(label="Enter code to evaluate", style=discord.TextStyle.paragraph)
+    code = ui.TextInput(
+        label="Enter code to evaluate", style=discord.TextStyle.paragraph
+    )
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 
         try:
             code = self.code.value
+
+            self.logger.debug(f"Evaluated code: {code}")
 
             eval(code)
 
