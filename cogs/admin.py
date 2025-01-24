@@ -2,10 +2,12 @@ import logging
 import discord
 import pathlib
 import traceback
+import wavelink
 from discord import app_commands
 from discord.ext import commands
 from modals.admin import EvalModal
 from config import ADMIN_IDS
+from typing import List
 
 
 class Admin(commands.Cog):
@@ -37,6 +39,45 @@ class Admin(commands.Cog):
         else:
             await interaction.response.send_message("Error: Database not found", ephemeral=True)
 
+    @app_commands.command(name="lvstats", description="shows lavalinks stats")
+    async def lvstats(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            players: List[wavelink.PlayerResponsePayload] = await wavelink.Node.fetch_players()
+            stats: wavelink.StatsResponsePayload = await wavelink.Node.fetch_stats()
+
+            if not players or not stats:
+                await interaction.followup.send("Unable to fetch lavalink stats", ephemeral=True)
+                return
+
+            # Format and display stats
+            message = f"Players: {len(players)}\n"
+            message += f"Uptime: {stats.uptime}\n"
+            message += f"Memory: Used: {stats.memory.used}, Reservable: {stats.memory.reservable}, Allocated: {stats.memory.allocated}, Free: {stats.memory.free}\n"
+            # message += f"CPU: Cores: {stats.cpu.cores}, Load: {stats.cpu.lavalink_load}, System Load: {stats.cpu.system_load}\n"
+
+            # Fetch and display player details
+            for player in players:
+                player_info = f"Player: {player.__str__()}\n"
+                player_info += f"Guild ID: {player.guild_id}\n"
+                player_info += f"Paused: {player.paused}\n"
+                player_info += f"State: {player.state.connected}, ping: {player.state.ping}\n"
+                if player.track:
+                    player_info += f"Track: {player.track.title}\n"
+
+            embed = discord.Embed(
+                title="Lavalink Stats",
+                color=discord.Color.blurple(),
+                timestamp=discord.utils.utcnow(),
+                description=message + player_info,
+            )
+
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"Error: {e}", ephemeral=True)
+            return
+
     @app_commands.command(name="database", description="Database operations.")
     @app_commands.describe(query="The query to execute.")
     async def database(self, interaction: discord.Interaction, query: str = None):
@@ -54,7 +95,7 @@ class Admin(commands.Cog):
                             color=discord.Color.blurple(),
                             timestamp=discord.utils.utcnow(),
                         )
-                        
+
                         await interaction.followup.send(embed=embed)
                 except Exception as e:
                     await interaction.followup.send(f"Error: {e}", ephemeral=True)
@@ -88,7 +129,7 @@ class Admin(commands.Cog):
     async def reload(self, interaction: discord.Interaction, cog: str):
         await interaction.response.defer(ephemeral=True)
         try:
-            await self.bot.reload_extension(f"{cog}")
+            await self.bot.reload_extension(f"cogs.{cog}")
             await interaction.followup.send(f"Cog {cog} reloaded.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"Error: {e}", ephemeral=True)
@@ -108,7 +149,7 @@ class Admin(commands.Cog):
     async def load(self, interaction: discord.Interaction, cog: str):
         await interaction.response.defer(ephemeral=True)
         try:
-            await self.bot.load_extension(f"{cog}")
+            await self.bot.load_extension(f"cogs.{cog}")
             await interaction.followup.send(f"Cog {cog} loaded.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"Error: {e}", ephemeral=True)
@@ -129,7 +170,7 @@ class Admin(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         try:
-            await self.bot.unload_extension(f"{cog}")
+            await self.bot.unload_extension(f"cogs.{cog}")
             await interaction.followup.send(f"Cog {cog} unloaded.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"Error: {e}", ephemeral=True)
