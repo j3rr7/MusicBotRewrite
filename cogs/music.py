@@ -1409,41 +1409,6 @@ class Music(commands.Cog):
             )
             return
 
-    @playlist_song.command(name="shuffle", description="Shuffles the playlist.")
-    @app_commands.describe(playlist_name="The name of the playlist.")
-    async def song_shuffle(self, interaction: discord.Interaction, playlist_name: str):
-        await interaction.response.defer(ephemeral=True)
-
-        try:
-            playlist = await self.database.get_one(
-                "playlists",
-                "name = ? AND user_id = ?",
-                (playlist_name, interaction.user.id),
-            )
-
-            if not playlist:
-                await interaction.followup.send(
-                    f"Playlist '{playlist_name}' not found", ephemeral=True
-                )
-                return
-
-            # check ownership
-            if int(playlist[1]) != interaction.user.id:
-                await interaction.followup.send(
-                    f"Playlist '{playlist_name}' is not owned by you", ephemeral=True
-                )
-                return
-
-            # shuffle playlist, but make sure positions are correct
-            await self.database.query("")
-
-            await interaction.followup.send(
-                f"Playlist '{playlist_name}' shuffled", ephemeral=True
-            )
-        except Exception as e:
-            await interaction.followup.send(f"Error: {e}", ephemeral=True)
-            return
-
     async def cog_app_command_error(
         self,
         interaction: discord.Interaction[discord.Client],

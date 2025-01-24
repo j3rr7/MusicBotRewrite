@@ -57,12 +57,6 @@ class MusicBot(commands.AutoShardedBot):
         for file in self.cog_extensions:
             await self.load_extension(".".join(file.with_suffix("").parts))
 
-        if self.debug_mode:
-            guild = discord.Object(id=DEBUG_GUILD_ID)
-            self.tree.copy_global_to(guild=guild)
-            synced = await self.tree.sync(guild=guild)
-            logger.info(f"Synced {len(synced)} global commands")
-
 
 if __name__ == "__main__":
     bot = MusicBot(
