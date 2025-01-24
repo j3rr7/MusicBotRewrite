@@ -28,6 +28,8 @@ class Music(commands.Cog):
         self.logger = logging.getLogger(__name__)
         self.nodes = []
 
+        self.use_local_lavalink = True
+
         # check if self.bot has attr database
         if hasattr(self.bot, "database"):
             self.database: DatabaseManager = self.bot.database
@@ -38,6 +40,8 @@ class Music(commands.Cog):
 
     async def cog_unload(self):
         self.logger.info("Music cog unloaded")
+
+        await wavelink.Node.close(eject=True)
 
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
@@ -76,29 +80,14 @@ class Music(commands.Cog):
             # close and terminate all connection
             await wavelink.node.Pool.close()
 
-            self.nodes.append(
-                wavelink.Node(
-                    uri="http://localhost:2333",
-                    identifier="Local Lavalink",
-                    password="youshallnotpass",
+            if self.use_local_lavalink:
+                self.nodes.append(
+                    wavelink.Node(
+                        uri="http://localhost:2333",
+                        identifier="Local Lavalink",
+                        password="youshallnotpass",
+                    )
                 )
-            )
-
-            # add some public nodes
-            # self.nodes.append(
-            #     wavelink.Node(
-            #         uri="https://lavalink.alfari.id:443",
-            #         identifier="Catfein DE",
-            #         password="catfein",
-            #     )
-            # )
-            # self.nodes.append(
-            #     wavelink.Node(
-            #         uri="https://lava-v4.ajieblogs.eu.org:443",
-            #         identifier="Public Lavalink v4",
-            #         password="https://dsc.gg/ajidevserver",
-            #     )
-            # )
 
             await wavelink.node.Pool.connect(
                 nodes=self.nodes, client=self.bot, cache_capacity=100
@@ -1009,8 +998,15 @@ class Music(commands.Cog):
             if not player.playing:
                 await player.play(player.queue.get(), volume=volume)
 
+            embed = discord.Embed(
+                title=f"Playing Playlist: {playlist_name}",
+                description=f"Playing {len(tracks)} tracks",
+                color=discord.Color.green(),
+            )
+            embed.set_footer(text=f"Requested by {interaction.user}")
+
             await interaction.followup.send(
-                f"Playing playlist '{playlist_name}'", ephemeral=True
+                embed=embed, ephemeral=True
             )
 
         except Exception as e:
