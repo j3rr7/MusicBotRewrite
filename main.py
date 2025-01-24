@@ -48,7 +48,7 @@ class MusicBot(commands.AutoShardedBot):
             await self.change_presence(
                 activity=discord.Activity(
                     type=discord.ActivityType.playing,
-                    name="BETA v1.0.0 | /issues | /help",
+                    name="BETA v1.0.1 | /issues | /help",
                 ),
                 status=discord.Status.online,
             )
