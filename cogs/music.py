@@ -1052,6 +1052,7 @@ class Music(commands.Cog):
 
             max_position = query_result[0][0]
             new_position = 0 if max_position is None else max_position + 1
+            await self.database.delete("tracks", "playlist_id = ?", (playlist[0],))
 
             if player.playing:
                 track = player.current
