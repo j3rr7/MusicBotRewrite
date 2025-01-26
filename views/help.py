@@ -1,10 +1,5 @@
-import math
-import traceback
-import wavelink
 import discord
-import logging
 from discord.ui import View, Button
-from typing import List, Any, Dict
 
 
 class HelpView(View):

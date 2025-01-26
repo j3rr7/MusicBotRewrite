@@ -1,12 +1,19 @@
 import duckdb
 import asyncio
-import datetime
 from typing import List, Dict, Any, Optional
+from entities.guild import *
+from entities.member import *
+from entities.playlist import *
+from entities.track import *
 
 
 class DatabaseManager:
     def __init__(self, database_path: str = ":memory:"):
         self.database_path = database_path
+        self._guild_manager = None
+        self._member_manager = None
+        self._playlist_manager = None
+        self._track_manager = None
 
     async def query(self, query: str, params: Optional[tuple] = None) -> List[Any]:
         """
@@ -41,18 +48,6 @@ class DatabaseManager:
         """Creates a table."""
         await self.query(f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})")
 
-    # async def insert(self, table_name: str, data: List[Dict]):
-    #     """Inserts data into a table."""
-    #     if not data:
-    #         return
-
-    #     columns = ", ".join(data[0].keys())
-    #     placeholders = ", ".join(["?"] * len(data[0]))
-    #     query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
-
-    #     for row in data:
-    #         values = tuple(row.values())
-    #         await self.query(query, values)
     async def insert(self, table_name: str, data: List[Dict], mode: str = "normal"):
         """Inserts data into a table with optional IGNORE/REPLACE modes.
 
@@ -145,25 +140,6 @@ class DatabaseManager:
         values = tuple(data.values()) + (where_params or ())
         await self.query(query, values)
 
-    # async def update(
-    #     self,
-    #     table_name: str,
-    #     data: Dict,
-    #     where_clause: str,
-    #     where_params: Optional[tuple] = None,
-    #     exclude_keys: Optional[List[str]] = None,
-    # ):
-    #     """Updates data in a table, optionally excluding specific keys."""
-
-    #     exclude_keys = exclude_keys or []
-    #     filtered_data = {k: v for k, v in data.items() if k not in exclude_keys}
-
-    #     set_clause = ", ".join([f"{key} = ?" for key in filtered_data])
-    #     query = f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}"
-    #     values = tuple(filtered_data.values()) + (where_params or ())
-
-    #     await self.query(query, values)
-
     async def delete(
         self, table_name: str, where_clause: str, where_params: Optional[tuple] = None
     ):
@@ -193,6 +169,34 @@ class DatabaseManager:
         query = "SELECT name FROM sqlite_master WHERE type='table' AND name = ?"  # Use sqlite_master for DuckDB
         result = await self.query(query, (table_name,))
         return bool(result)
+
+    @property
+    def guild(self) -> "Guild":
+        """Provides access to the Guild entity manager."""
+        if self._guild_manager is None:
+            self._guild_manager = Guild(self)
+        return self._guild_manager
+
+    @property
+    def member(self) -> "Member":
+        """Provides access to the Member entity manager."""
+        if self._member_manager is None:
+            self._member_manager = Member(self)
+        return self._member_manager
+
+    @property
+    def playlist(self) -> "Playlist":
+        """Provides access to the Playlist entity manager."""
+        if self._playlist_manager is None:
+            self._playlist_manager = Playlist(self)
+        return self._playlist_manager
+
+    @property
+    def track(self) -> "Track":
+        """Provides access to the Track entity manager."""
+        if self._track_manager is None:
+            self._track_manager = Track(self)
+        return self._track_manager
 
 
 async def on_setup_tables(db_name: str = "database.db"):
@@ -250,15 +254,53 @@ CREATE TABLE IF NOT EXISTS issues (
         conn.commit()
 
 
+async def on_setup_updated_tables(db_name: str = "database.db"):
+    with duckdb.connect(db_name) as conn:
+        conn.sql(
+            """
+CREATE TABLE IF NOT EXISTS guild (
+    guild_id BIGINT PRIMARY KEY,
+    twenty_four_online BOOLEAN DEFAULT FALSE,
+    music_channel_id BIGINT DEFAULT NULL
+);
+CREATE TABLE IF NOT EXISTS member (
+    user_id BIGINT PRIMARY KEY,
+    volume INTEGER DEFAULT 30,
+    filters VARCHAR,
+    autoplay VARCHAR CHECK (autoplay IN ('disabled', 'partial', 'enabled')),
+    loop VARCHAR CHECK (loop IN ('normal', 'single', 'all'))
+);
+CREATE TABLE IF NOT EXISTS playlist (
+    playlist_id UUID PRIMARY KEY DEFAULT uuid(),
+    user_id BIGINT,
+    name VARCHAR,
+    description TEXT DEFAULT NULL,
+    public BOOLEAN DEFAULT TRUE,
+    locked BOOLEAN DEFAULT FALSE,
+);
+CREATE TABLE IF NOT EXISTS track (
+    track_id UUID PRIMARY KEY DEFAULT uuid(),
+    playlist_id UUID,
+    title VARCHAR,
+    url VARCHAR,
+    extra JSON DEFAULT NULL,
+    FOREIGN KEY (playlist_id) REFERENCES playlist(playlist_id),
+);
+"""
+        )
+        conn.commit()
+
+
 async def main():
-    # await on_setup_tables("database.db")
-    db_manager = DatabaseManager("database.db")
-    # await db_manager.query("SELECT * FROM guilds")
-    # await db_manager.query("SELECT * FROM members")
-    # await db_manager.query("SELECT * FROM user_settings")
-    # await db_manager.query("SELECT * FROM playlists")
-    # await db_manager.query("SELECT * FROM tracks")
-    print(await db_manager.query("SELECT * FROM issues"))
+    await on_setup_updated_tables("data.db")
+
+    with duckdb.connect("data.db") as conn:
+        print(conn.sql("SELECT * FROM playlist"))
+        # result = conn.execute(
+        #     "INSERT INTO playlist (playlist_id, user_id, name, description, public, locked) VALUES (?, ?, ?, ?, ?, ?)",
+        #     [uuid.uuid4(), 1, "joko", None, False, False],
+        # )
+        # print(result.fetchone())
 
 
 if __name__ == "__main__":

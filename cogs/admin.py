@@ -5,7 +5,7 @@ import traceback
 import wavelink
 from discord import app_commands
 from discord.ext import commands
-from modals.admin import EvalModal
+from importlib import import_module
 from config import ADMIN_IDS
 from typing import List
 
@@ -31,86 +31,81 @@ class Admin(commands.Cog):
             "Slash commands synced.", ephemeral=True
         )
 
-    @app_commands.command(name="eval", description="Evaluates code.")
-    async def eval(self, interaction: discord.Interaction):
-        if hasattr(self.bot, "database"):
-            code_modal = EvalModal(title="Evaluate Code", timeout=120)
-            await interaction.response.send_modal(code_modal)
-        else:
-            await interaction.response.send_message(
-                "Error: Database not found", ephemeral=True
-            )
-
-    @app_commands.command(name="lvstats", description="shows lavalinks stats")
+    @app_commands.command(name="lvstats", description="Shows Lavalink node stats")
     async def lvstats(self, interaction: discord.Interaction):
+        """
+        Displays statistics for all connected Lavalink nodes.
+        """
         await interaction.response.defer(ephemeral=True)
+
+        embed = discord.Embed(
+            title="Lavalink Node Stats",
+            color=discord.Color.blurple(),
+            timestamp=discord.utils.utcnow(),
+        )
+        stats_description = ""
+        player_details = ""
 
         try:
-            players: List[wavelink.PlayerResponsePayload] = (
-                await wavelink.Node.fetch_players()
-            )
-            stats: wavelink.StatsResponsePayload = await wavelink.Node.fetch_stats()
-
-            if not players or not stats:
-                await interaction.followup.send(
-                    "Unable to fetch lavalink stats", ephemeral=True
-                )
-                return
-
-            # Format and display stats
-            message = f"Players: {len(players)}\n"
-            message += f"Uptime: {stats.uptime}\n"
-            message += f"Memory: Used: {stats.memory.used}, Reservable: {stats.memory.reservable}, Allocated: {stats.memory.allocated}, Free: {stats.memory.free}\n"
-            # message += f"CPU: Cores: {stats.cpu.cores}, Load: {stats.cpu.lavalink_load}, System Load: {stats.cpu.system_load}\n"
-
-            # Fetch and display player details
-            for player in players:
-                player_info = f"Player: {player.__str__()}\n"
-                player_info += f"Guild ID: {player.guild_id}\n"
-                player_info += f"Paused: {player.paused}\n"
-                player_info += (
-                    f"State: {player.state.connected}, ping: {player.state.ping}\n"
-                )
-                if player.track:
-                    player_info += f"Track: {player.track.title}\n"
-
-            embed = discord.Embed(
-                title="Lavalink Stats",
-                color=discord.Color.blurple(),
-                timestamp=discord.utils.utcnow(),
-                description=message + player_info,
-            )
-
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"Error: {e}", ephemeral=True)
-            return
-
-    @app_commands.command(name="database", description="Database operations.")
-    @app_commands.describe(query="The query to execute.")
-    async def database(self, interaction: discord.Interaction, query: str = None):
-        await interaction.response.defer(ephemeral=True)
-
-        if hasattr(self.bot, "database"):
-            if query:
-                try:
-                    result = await self.bot.database.execute(query)
-
-                    if result:
-                        embed = discord.Embed(
-                            title=f"Database Result",
-                            description=f"{result}",
-                            color=discord.Color.blurple(),
-                            timestamp=discord.utils.utcnow(),
+            if not wavelink.node.Pool.nodes:
+                stats_description = "No Lavalink nodes connected."
+            else:
+                for node_name, node in wavelink.node.Pool.nodes.items():
+                    self.logger.debug(f"Fetching stats for node: {node_name} ({node})")
+                    try:
+                        players: List[wavelink.PlayerResponsePayload] = (
+                            await wavelink.Node.fetch_players(node)
+                        )
+                        stats: wavelink.StatsResponsePayload = (
+                            await wavelink.Node.fetch_stats(node)
                         )
 
-                        await interaction.followup.send(embed=embed)
-                except Exception as e:
-                    await interaction.followup.send(f"Error: {e}", ephemeral=True)
-            else:
-                await interaction.followup.send("Query is required.", ephemeral=True)
-        else:
-            await interaction.followup.send("Error: Database not found", ephemeral=True)
+                        node_stats_str = (
+                            f"**Node: {node_name}**\n"
+                            f"Players: {len(players)}\n"
+                            f"Uptime: {stats.uptime}\n"
+                            f"Memory: Used: {stats.memory.used} MB, Reservable: {stats.memory.reservable} MB, "
+                            f"Allocated: {stats.memory.allocated} MB, Free: {stats.memory.free} MB\n"
+                            f"CPU: Cores: {stats.cpu.cores}, Load: {stats.cpu.lavalink_load:.2f}%, System Load: {stats.cpu.system_load:.2f}%\n"  # Re-added CPU stats
+                        )
+                        stats_description += node_stats_str + "\n"
+
+                        if players:
+                            player_details += (
+                                f"\n**Player Details for Node: {node_name}**\n"
+                            )
+                            for player in players:
+                                track_title = "None"
+                                if player.track:
+                                    track_title = player.track.title
+
+                                player_info = (
+                                    f"  Guild ID: {player.guild_id}\n"
+                                    f"  Paused: {player.paused}\n"
+                                    f"  State: Connected: {player.state.connected}, Ping: {player.state.ping}ms\n"
+                                    f"  Track: {track_title}\n"
+                                )
+                                player_details += player_info
+
+                    except Exception as node_err:
+                        self.logger.error(
+                            f"Error fetching stats for node {node_name}: {node_err}"
+                        )
+                        stats_description += f"\n**Error fetching stats for node {node_name}:** {node_err}\n"
+
+            embed.description = stats_description
+            if player_details:
+                embed.add_field(
+                    name="Player Details", value=player_details, inline=False
+                )
+
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+        except Exception as e:
+            self.logger.exception(f"Error during lvstats command:")
+            await interaction.followup.send(
+                f"An error occurred while fetching Lavalink stats.", ephemeral=True
+            )
 
     @app_commands.command(
         name="prune", description="Deletes a number of messages. (max 100)"
@@ -137,7 +132,8 @@ class Admin(commands.Cog):
     async def reload(self, interaction: discord.Interaction, cog: str):
         await interaction.response.defer(ephemeral=True)
         try:
-            await self.bot.reload_extension(f"cogs.{cog}")
+            module = import_module(f"cogs.{cog}")
+            await self.bot.reload_extension(module.__name__)
             await interaction.followup.send(f"Cog {cog} reloaded.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"Error: {e}", ephemeral=True)
@@ -147,7 +143,7 @@ class Admin(commands.Cog):
         self, interaction: discord.Interaction, value: str
     ) -> list[app_commands.Choice[str]]:
         return [
-            app_commands.Choice(name=cog, value=cog)
+            app_commands.Choice(name=cog, value=str(cog).lower())
             for cog in self.bot.cogs
             if cog.startswith(value)
         ]
@@ -157,7 +153,8 @@ class Admin(commands.Cog):
     async def load(self, interaction: discord.Interaction, cog: str):
         await interaction.response.defer(ephemeral=True)
         try:
-            await self.bot.load_extension(f"cogs.{cog}")
+            module = import_module(f"cogs.{cog}")
+            await self.bot.load_extension(module.__name__)
             await interaction.followup.send(f"Cog {cog} loaded.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"Error: {e}", ephemeral=True)
@@ -167,7 +164,7 @@ class Admin(commands.Cog):
         self, interaction: discord.Interaction, value: str
     ) -> list[app_commands.Choice[str]]:
         return [
-            app_commands.Choice(name=cog, value=cog)
+            app_commands.Choice(name=cog, value=str(cog).lower())
             for cog in self.bot.cogs
             if cog.startswith(value)
         ]
@@ -178,7 +175,8 @@ class Admin(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         try:
-            await self.bot.unload_extension(f"cogs.{cog}")
+            module = import_module(f"cogs.{cog}")
+            await self.bot.unload_extension(module.__name__)
             await interaction.followup.send(f"Cog {cog} unloaded.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"Error: {e}", ephemeral=True)
@@ -188,7 +186,7 @@ class Admin(commands.Cog):
         self, interaction: discord.Interaction, value: str
     ) -> list[app_commands.Choice[str]]:
         return [
-            app_commands.Choice(name=cog, value=cog)
+            app_commands.Choice(name=cog, value=str(cog).lower())
             for cog in self.bot.cogs
             if cog.startswith(value)
         ]

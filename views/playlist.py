@@ -1,98 +1,73 @@
-import math
-import traceback
-import wavelink
+from views import PaginatedView
+
 import discord
-import logging
-from discord.ui import View
-from typing import List, Any, Dict
+from typing import List, Tuple, Any
 
 
-class PlaylistListView(View):
-    def __init__(self, playlists: List[tuple]):
-        super().__init__(timeout=180)
+class PlaylistListView(PaginatedView):
+    """
+    View for displaying a paginated list of playlists.
+    """
+
+    def __init__(self, playlists: List[Tuple[Any, Any, str]]):
+        super().__init__(playlists)
         self.playlists = playlists
-        self.current_page = 0
-        self.playlist_per_page = 10
-
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary, emoji="⬅️")
-    async def previous_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ):
-        self.current_page = max(0, self.current_page - 1)
-        await interaction.response.edit_message(embed=self.create_embed())
-
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary, emoji="➡️")
-    async def next_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ):
-        max_pages = math.ceil(len(self.playlists) / self.playlist_per_page)
-        self.current_page = min(self.current_page + 1, max_pages - 1)
-        await interaction.response.edit_message(embed=self.create_embed())
 
     def create_embed(self) -> discord.Embed:
+        """
+        Creates the embed displaying the current page of playlists.
+        """
         embed = discord.Embed(
-            title=f"Playlists Saved: {len(self.playlists)}", color=discord.Color.blue()
+            title=f"Playlists Saved: {len(self.item_list)}",
+            color=discord.Color.blue(),
         )
 
-        start_idx = self.current_page * self.playlist_per_page
-        end_idx = start_idx + self.playlist_per_page
+        if not self.item_list:
+            embed.description = "No playlists found."
+        else:
+            playlist_text_lines = []
+            for idx, playlist in enumerate(
+                self.get_current_page_items(),
+                start=self.current_page * self.items_per_page + 1,
+            ):
+                playlist_text_lines.append(f"{idx}. {playlist[2]}")
 
-        playlist_text = ""
-        for idx, playlist in enumerate(self.playlists[start_idx:end_idx], start=1):
-            playlist_text += f"{idx}. {playlist[2]}\n"
-
-        embed.description = playlist_text
-
-        max_pages = math.ceil(len(self.playlists) / self.playlist_per_page)
-        embed.set_footer(text=f"Page {self.current_page + 1}/{max_pages}")
+            embed.description = "\n".join(playlist_text_lines)
+            embed.set_footer(text=f"Page {self.current_page + 1}/{self.page_count}")
 
         return embed
 
 
-class PlaylistTrackView(View):
-    def __init__(self, tracks: List[Any]):
-        super().__init__(timeout=180)
-        self.tracks = list(tracks)
+class PlaylistTrackView(PaginatedView):
+    """
+    View for displaying a paginated list of playlist tracks.
+    """
 
-        self.current_page = 0
-        self.tracks_per_page = 10
-        self.page_count = math.ceil(len(self.tracks) / self.tracks_per_page)
-
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary, emoji="⬅️")
-    async def previous_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ):
-        self.current_page = max(0, self.current_page - 1)
-        await interaction.response.edit_message(embed=self.create_embed())
-
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary, emoji="➡️")
-    async def next_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ):
-        self.current_page = min(self.current_page + 1, self.page_count - 1)
-        await interaction.response.edit_message(embed=self.create_embed())
+    def __init__(self, tracks: List[Tuple[Any, Any, str, str]]):
+        super().__init__(tracks)
+        self.tracks = self.item_list
 
     def create_embed(self) -> discord.Embed:
+        """
+        Creates the embed displaying the current page of playlist tracks.
+        """
         embed = discord.Embed(
-            title=f"Playlist Tracks: {len(self.tracks)}", color=discord.Color.blue()
+            title=f"Playlist Tracks: {len(self.item_list)}",
+            color=discord.Color.blue(),
         )
 
-        start_idx = self.current_page * self.tracks_per_page
-        end_idx = min(start_idx + self.tracks_per_page, len(self.tracks))
+        if not self.item_list:
+            embed.description = "No tracks in this playlist."
+        else:
+            track_lines = []
+            for idx, track in enumerate(
+                self.get_current_page_items(),
+                start=self.current_page * self.items_per_page + 1,
+            ):
+                track_line = f"{idx}. [{track[3]}]({track[2] if track[2] else ''})"
+                track_lines.append(track_line)
 
-        track_list = []
-        for idx, track in enumerate(
-            self.tracks[start_idx:end_idx], start=start_idx + 1
-        ):
-            # Format track information
-            track_line = (
-                f"{idx}. [{track[3]}]({track[2] if track[2] else ""})\n"
-                # f"    └ Duration: {track.duration_str} | Added: <t:{int(track.added_at.timestamp())}:R>"
-            )
-            track_list.append(track_line)
-
-        embed.description = "\n".join(track_list)
-
-        embed.set_footer(text=f"Page {self.current_page + 1}/{self.page_count}")
+            embed.description = "\n".join(track_lines)
+            embed.set_footer(text=f"Page {self.current_page + 1}/{self.page_count}")
 
         return embed

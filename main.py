@@ -1,6 +1,7 @@
 import logging
 import traceback
 import discord
+from duckdb import CatalogException
 from config import DISCORD_TOKEN, DISCORD_TOKEN_DEV, DEBUG_GUILD_ID
 from database import DatabaseManager
 from pathlib import Path
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 class MusicBot(commands.AutoShardedBot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.debug_mode = False
+        self.debug_mode = True
         self.database = DatabaseManager("database.db")
         self.cog_extensions: list[Path] = [
             file for file in Path("cogs").rglob("*.py") if not file.stem.startswith("_")
@@ -31,9 +32,12 @@ class MusicBot(commands.AutoShardedBot):
     async def on_ready(self):
         logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
 
-        # get all guilds from bot and insert to database
-        for guild in self.guilds:
-            await self.database.insert("guilds", [{"id": guild.id}], "ignore")
+        try:
+            # get all guilds from bot and insert to database
+            for guild in self.guilds:
+                await self.database.guild.create_or_ignore(guild.id)
+        except CatalogException:
+            logger.error("Failed to insert guilds: ", exc_info=True)
 
         # setup activity
         if self.debug_mode:
@@ -48,7 +52,7 @@ class MusicBot(commands.AutoShardedBot):
             await self.change_presence(
                 activity=discord.Activity(
                     type=discord.ActivityType.playing,
-                    name="BETA v1.0.1 | /issues | /help",
+                    name="BETA v1.0.2 | /issues | /help",
                 ),
                 status=discord.Status.online,
             )
@@ -69,6 +73,6 @@ if __name__ == "__main__":
         DISCORD_TOKEN_DEV if bot.debug_mode else DISCORD_TOKEN,
         log_handler=log_handler,
         log_formatter=formatter,
-        log_level=logging.INFO,
+        log_level=logging.DEBUG if bot.debug_mode else logging.INFO,
         root_logger=True,
     )
