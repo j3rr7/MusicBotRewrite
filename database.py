@@ -1,12 +1,19 @@
 import duckdb
 import asyncio
-import datetime
 from typing import List, Dict, Any, Optional
+from entities.guild import *
+from entities.member import *
+from entities.playlist import *
+from entities.track import *
 
 
 class DatabaseManager:
     def __init__(self, database_path: str = ":memory:"):
         self.database_path = database_path
+        self._guild_manager = None
+        self._member_manager = None
+        self._playlist_manager = None
+        self._track_manager = None
 
     async def query(self, query: str, params: Optional[tuple] = None) -> List[Any]:
         """
@@ -41,18 +48,6 @@ class DatabaseManager:
         """Creates a table."""
         await self.query(f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})")
 
-    # async def insert(self, table_name: str, data: List[Dict]):
-    #     """Inserts data into a table."""
-    #     if not data:
-    #         return
-
-    #     columns = ", ".join(data[0].keys())
-    #     placeholders = ", ".join(["?"] * len(data[0]))
-    #     query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
-
-    #     for row in data:
-    #         values = tuple(row.values())
-    #         await self.query(query, values)
     async def insert(self, table_name: str, data: List[Dict], mode: str = "normal"):
         """Inserts data into a table with optional IGNORE/REPLACE modes.
 
@@ -145,25 +140,6 @@ class DatabaseManager:
         values = tuple(data.values()) + (where_params or ())
         await self.query(query, values)
 
-    # async def update(
-    #     self,
-    #     table_name: str,
-    #     data: Dict,
-    #     where_clause: str,
-    #     where_params: Optional[tuple] = None,
-    #     exclude_keys: Optional[List[str]] = None,
-    # ):
-    #     """Updates data in a table, optionally excluding specific keys."""
-
-    #     exclude_keys = exclude_keys or []
-    #     filtered_data = {k: v for k, v in data.items() if k not in exclude_keys}
-
-    #     set_clause = ", ".join([f"{key} = ?" for key in filtered_data])
-    #     query = f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}"
-    #     values = tuple(filtered_data.values()) + (where_params or ())
-
-    #     await self.query(query, values)
-
     async def delete(
         self, table_name: str, where_clause: str, where_params: Optional[tuple] = None
     ):
@@ -193,6 +169,34 @@ class DatabaseManager:
         query = "SELECT name FROM sqlite_master WHERE type='table' AND name = ?"  # Use sqlite_master for DuckDB
         result = await self.query(query, (table_name,))
         return bool(result)
+
+    @property
+    def guild(self) -> "Guild":
+        """Provides access to the Guild entity manager."""
+        if self._guild_manager is None:
+            self._guild_manager = Guild(self)
+        return self._guild_manager
+
+    @property
+    def member(self) -> "Member":
+        """Provides access to the Member entity manager."""
+        if self._member_manager is None:
+            self._member_manager = Member(self)
+        return self._member_manager
+
+    @property
+    def playlist(self) -> "Playlist":
+        """Provides access to the Playlist entity manager."""
+        if self._playlist_manager is None:
+            self._playlist_manager = Playlist(self)
+        return self._playlist_manager
+
+    @property
+    def track(self) -> "Track":
+        """Provides access to the Track entity manager."""
+        if self._track_manager is None:
+            self._track_manager = Track(self)
+        return self._track_manager
 
 
 async def on_setup_tables(db_name: str = "database.db"):
@@ -250,16 +254,99 @@ CREATE TABLE IF NOT EXISTS issues (
         conn.commit()
 
 
-async def main():
-    # await on_setup_tables("database.db")
-    db_manager = DatabaseManager("database.db")
-    # await db_manager.query("SELECT * FROM guilds")
-    # await db_manager.query("SELECT * FROM members")
-    # await db_manager.query("SELECT * FROM user_settings")
-    # await db_manager.query("SELECT * FROM playlists")
-    # await db_manager.query("SELECT * FROM tracks")
-    print(await db_manager.query("SELECT * FROM issues"))
+async def on_setup_updated_tables(db_name: str = "database.db"):
+    with duckdb.connect(db_name) as conn:
+        conn.sql(
+            """
+CREATE TABLE IF NOT EXISTS guild (
+    guild_id BIGINT PRIMARY KEY,
+    twenty_four_online BOOLEAN DEFAULT FALSE,
+    music_channel_id BIGINT DEFAULT NULL
+);
+CREATE TABLE IF NOT EXISTS member (
+    user_id BIGINT PRIMARY KEY,
+    volume INTEGER DEFAULT 30,
+    filters VARCHAR,
+    autoplay VARCHAR CHECK (autoplay IN ('disabled', 'partial', 'enabled')),
+    loop VARCHAR CHECK (loop IN ('normal', 'single', 'all'))
+);
+CREATE TABLE IF NOT EXISTS playlist (
+    playlist_id UUID PRIMARY KEY DEFAULT uuid(),
+    owner_id BIGINT,
+    name VARCHAR,
+    description TEXT DEFAULT NULL,
+    public BOOLEAN DEFAULT TRUE,
+    locked BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+);
+CREATE TABLE IF NOT EXISTS track (
+    track_id UUID PRIMARY KEY DEFAULT uuid(),
+    playlist_id UUID,
+    title VARCHAR,
+    url VARCHAR,
+    extra JSON DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (playlist_id) REFERENCES playlist(playlist_id),
+);
+CREATE TABLE IF NOT EXISTS issue (
+  issue_id UUID PRIMARY KEY DEFAULT uuid(),
+  user_id BIGINT,
+  issue TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+);
+"""
+        )
+        conn.commit()
 
+async def migrate(old_db: str = "database.db", new_db: str = "database2.db"):
+    """
+    Migrates data from the old database schema to the new database schema.
+    """
+    await on_setup_updated_tables(new_db)
+
+    with duckdb.connect(old_db) as old_conn, duckdb.connect(new_db) as new_conn:
+        try:
+            # migrate user_settings
+            for user_settings in old_conn.execute("SELECT * FROM user_settings").fetchall():
+                print(user_settings)
+
+                new_conn.execute(
+                    "INSERT INTO member (user_id, volume) VALUES (?, ?)",
+                    (user_settings[0], user_settings[1]),
+                )
+            
+            # migrate playlist
+            for playlist in old_conn.execute("SELECT * FROM playlists").fetchall():
+                print(playlist)
+
+                new_conn.execute(
+                    "INSERT INTO playlist (owner_id, name) VALUES (?, ?)",
+                    (playlist[1], playlist[2]),
+                )
+
+            # migrate track
+            for track in old_conn.execute("SELECT * FROM tracks").fetchall():
+                print(track)
+
+                new_conn.execute(
+                    "INSERT INTO track (playlist_id, title, url) VALUES (?, ?, ?)",
+                    (track[1], track[2], track[3]),
+                )
+
+            # print(new_conn.sql("SELECT * FROM guild"))
+            # print(new_conn.sql("SELECT * FROM member"))
+            # print(new_conn.sql("SELECT * FROM playlist"))
+            # print(new_conn.sql("SELECT * FROM track"))
+            # print(new_conn.sql("SELECT * FROM issue"))
+        except Exception as e:
+            print("Error migrating data:", e)
+
+async def main():
+    await on_setup_tables("database.db")
+    await migrate("database.db", "database2.db")
+
+    with duckdb.connect("database.db") as conn:
+        print(conn.sql("SELECT * FROM issues"))
 
 if __name__ == "__main__":
     asyncio.run(main())
