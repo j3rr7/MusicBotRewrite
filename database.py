@@ -323,8 +323,8 @@ async def migrate(old_db: str = "database.db", new_db: str = "database2.db"):
                 print(playlist)
 
                 new_conn.execute(
-                    "INSERT INTO playlist (owner_id, name) VALUES (?, ?)",
-                    (playlist[1], playlist[2]),
+                    "INSERT INTO playlist (playlist_id, owner_id, name) VALUES (?, ?)",
+                    (playlist[0], playlist[1], playlist[2]),
                 )
 
             # migrate track
