@@ -40,7 +40,7 @@ class SongSelect(discord.ui.Select):
             )
             # Disable the select menu after selection (optional, but good UX)
             self.disabled = True
-            await interaction.edit_original_response(view=self)
+            await interaction.delete_original_response()
 
         except Exception as e:
             await interaction.response.send_message(
