@@ -24,6 +24,52 @@ class Admin(commands.Cog):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return interaction.user.id in ADMIN_IDS
 
+    @staticmethod
+    def format_bytes(bytes: int) -> str:
+        """
+        Converts a byte size to a human-readable format.
+        """
+        bytes = int(bytes)
+        if bytes <= 0:
+            return "0 B"
+        if bytes < 1024:
+            return f"{bytes} B"
+        if bytes < 1024 * 1024:
+            return f"{bytes / 1024:.2f} KB"
+        if bytes < 1024 * 1024 * 1024:
+            return f"{bytes / (1024 * 1024):.2f} MB"
+        return f"{bytes / (1024 * 1024 * 1024):.2f} GB"
+
+    @staticmethod
+    def format_miliseconds(milliseconds: int) -> str:
+        """
+        Converts milliseconds (integer) to human readable format
+        """
+        if milliseconds < 0:
+            raise ValueError("Milliseconds cannot be negative")
+
+        if milliseconds == 0:
+            return "0 milliseconds"
+
+        units = [
+            ("days", 1000 * 60 * 60 * 24),
+            ("hours", 1000 * 60 * 60),
+            ("minutes", 1000 * 60),
+            ("seconds", 1000),
+            ("milliseconds", 1),
+        ]
+
+        output_parts = []
+        remaining_milliseconds = milliseconds
+
+        for unit_name, unit_value in units:
+            unit_count = remaining_milliseconds // unit_value
+            if unit_count > 0:
+                output_parts.append(f"{unit_count} {unit_name}")
+                remaining_milliseconds %= unit_value
+
+        return ", ".join(output_parts)
+
     @app_commands.command(name="sync", description="Syncs slash commands.")
     async def sync(self, interaction: discord.Interaction):
         await self.bot.tree.sync(guild=None)
@@ -63,10 +109,10 @@ class Admin(commands.Cog):
                         node_stats_str = (
                             f"**Node: {node_name}**\n"
                             f"Players: {len(players)}\n"
-                            f"Uptime: {stats.uptime}\n"
-                            f"Memory: Used: {stats.memory.used} MB, Reservable: {stats.memory.reservable} MB, "
-                            f"Allocated: {stats.memory.allocated} MB, Free: {stats.memory.free} MB\n"
-                            f"CPU: Cores: {stats.cpu.cores}, Load: {stats.cpu.lavalink_load:.2f}%, System Load: {stats.cpu.system_load:.2f}%\n"  # Re-added CPU stats
+                            f"Uptime: {Admin.format_miliseconds(stats.uptime)}\n"
+                            f"Memory: Used: {Admin.format_bytes(stats.memory.used)}, Reservable: {Admin.format_bytes(stats.memory.reservable)}, "
+                            f"Allocated: {Admin.format_bytes(stats.memory.allocated)}, Free: {Admin.format_bytes(stats.memory.free)}\n"
+                            f"CPU: Cores: {stats.cpu.cores}, Load: {stats.cpu.lavalink_load:.2f}%, System Load: {stats.cpu.system_load:.2f}%\n"
                         )
                         stats_description += node_stats_str + "\n"
 

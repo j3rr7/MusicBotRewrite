@@ -22,23 +22,26 @@ class HelpView(View):
                     ("/resume", "Resume playback"),
                     (
                         "/seek <timestamp>",
-                        "Seek to a specific time in the current song (e.g., 1:30, 30s)",
+                        "Seek to a specific time in the current song (e.g., 1m:30s, 30s)",
                     ),
                     ("/shuffle", "Shuffle the queue"),
                     ("/loop <state>", "Set loop mode (none, song, queue)"),
                     ("/volume <volume>", "Set the volume (0-100)"),
                     ("/autoplay <state>", "Enable or disable autoplay (on, off)"),
+                    ("/connect", "Connect the bot to the voice channel"),
                     ("/disconnect", "Disconnect the bot from the voice channel"),
                     ("/queue", "Display the current queue"),
+                    ("/clear", "Clear the current queue"),
+                    ("/np", "Display the current playing song"),
                 ],
             },
             {
                 "title": "Playlist Management Commands",
                 "description": [
-                    ("/playlist list [member]", "List your or a member's playlists"),
+                    ("/playlist list [member]", "List your or other playlists"),
                     (
                         "/playlist create <name> [public]",
-                        "Create a new playlist (default public)",
+                        "Create a new playlist",
                     ),
                     (
                         "/playlist rename <playlist_name> <new_name>",
@@ -47,36 +50,31 @@ class HelpView(View):
                     ("/playlist delete <playlist_name>", "Delete a playlist"),
                     ("/playlist view <playlist_name> [member]", "View a playlist"),
                     (
-                        "/playlist export <playlist_name> <extension>",
-                        "Export a playlist (e.g., .txt, .json)",
+                        "/playlist export <playlist_name>",
+                        "Export a playlist",
                     ),
                     (
-                        "/playlist import [playlist_name]",
-                        "Import a playlist (file upload)",
+                        "/playlist import",
+                        "Import a playlist",
                     ),
-                    ("/playlist play <playlist_name>", "Play a playlist"),
-                    ("/playlist current", "Shows the currently playing playlist"),
+                    ("/playlist play <playlist_name> [shuffled]", "Play a playlist"),
                 ],
             },
             {
                 "title": "Song Management Commands",
                 "description": [
                     (
+                        "/song current <playlist_name>",
+                        "Inserts the current queue into a playlist (will replace existing playlist songs)",
+                    ),
+                    (
                         "/song add <playlist_name> [song_url] [song_title]",
                         "Add a song to a playlist (either URL or title)",
                     ),
+                    ("/song remove <playlist_name>", "Remove a song from a playlist"),
                     (
-                        "/song remove <playlist_name> <index>",
-                        "Remove a song from a playlist by its index",
-                    ),
-                    (
-                        "/song move <playlist_name> <index> <target> [mode]",
-                        "Move a song within a playlist",
-                    ),
-                    ("/song clear <playlist_name>", "Clear all songs from a playlist"),
-                    (
-                        "/song shuffle <playlist_name>",
-                        "Shuffle songs within a playlist",
+                        "/song clear <playlist_name>",
+                        "Clears all songs from a playlist",
                     ),
                 ],
             },

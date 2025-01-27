@@ -4,6 +4,7 @@ import logging
 import json
 import base64
 import zlib
+import uuid
 from discord import ui
 from database import DatabaseManager
 from typing import Optional, Any
@@ -61,7 +62,6 @@ class ImportPlaylistModal(ui.Modal):
         """
         Handles modal timeout. Disables all input fields and deletes the original response.
         """
-        self.logger.debug("Modal timed out.")
         for item in self.children:
             if isinstance(item, ui.TextInput):
                 item.disabled = True
@@ -110,10 +110,8 @@ class ImportPlaylistModal(ui.Modal):
         if not playlist_name or not playlist_data:
             return "Please fill in both Playlist Name and Playlist Data fields."
 
-        if await self.database.get_one(
-            "playlists",
-            "name = ? AND user_id = ?",
-            (playlist_name, self.interaction.user.id),
+        if await self.database.playlist.get_by_name_owner_id(
+            playlist_name, interaction.user.id
         ):
             return f"Playlist with name `{playlist_name}` already exists."
 
@@ -133,7 +131,6 @@ class ImportPlaylistModal(ui.Modal):
             compressed_data = base64.urlsafe_b64decode(playlist_data_str)
             json_data = zlib.decompress(compressed_data).decode("utf-8")
             tracks_obj = json.loads(json_data)
-            self.logger.debug("Playlist data decoded successfully.")
             return tracks_obj
         except Exception as e:
             self.logger.error(f"Error decoding playlist data: {e}", exc_info=True)
@@ -160,19 +157,28 @@ class ImportPlaylistModal(ui.Modal):
             return
 
         try:
-            # TODO: Implement the actual playlist import logic here using tracks_obj and playlist_name
-            # Example (replace with your actual database interaction):
-            # playlist_id = self.database.create_playlist(
-            #     playlist_name, interaction.user.id, tracks_obj['songs']
-            # )
-            num_tracks = len(tracks_obj.get("songs", []))
+            songs = tracks_obj.get("songs", [])
+            playlist_name = tracks_obj.get("playlist_name", "Unknown")
+            # playlist_owner = int(tracks_obj.get("playlist_owner", -1))
+
+            self.logger.debug(f"Decoded data: {songs}, playlist_name: {playlist_name}")
+
+            playlist_id = uuid.uuid4()
+
+            await self.database.playlist.create(
+                interaction.user.id, playlist_name, playlist_id=playlist_id
+            )
+
+            for song in songs:
+                await self.database.track.create(
+                    playlist_id,
+                    song.get("title", "Unknown"),
+                    song.get("url", "Unknown"),
+                )
 
             await interaction.followup.send(
-                f"Imported playlist `{playlist_name}` with {num_tracks} tracks. (Import logic not fully implemented yet!)",
+                f"Imported playlist `{playlist_name}` with {len(songs)} tracks. (Import logic not fully implemented yet!)",
                 ephemeral=True,
-            )
-            self.logger.info(
-                f"Playlist '{playlist_name}' imported successfully by user {interaction.user.id} with {num_tracks} tracks."
             )
         except Exception as e:
             tb = "".join(traceback.format_exception(type(e), e, e.__traceback__))

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class MusicBot(commands.AutoShardedBot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.debug_mode = True
+        self.debug_mode = False
         self.database = DatabaseManager("database.db")
         self.cog_extensions: list[Path] = [
             file for file in Path("cogs").rglob("*.py") if not file.stem.startswith("_")

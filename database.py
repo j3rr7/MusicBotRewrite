@@ -298,6 +298,7 @@ CREATE TABLE IF NOT EXISTS issue (
         )
         conn.commit()
 
+
 async def migrate(old_db: str = "database.db", new_db: str = "database2.db"):
     """
     Migrates data from the old database schema to the new database schema.
@@ -307,14 +308,16 @@ async def migrate(old_db: str = "database.db", new_db: str = "database2.db"):
     with duckdb.connect(old_db) as old_conn, duckdb.connect(new_db) as new_conn:
         try:
             # migrate user_settings
-            for user_settings in old_conn.execute("SELECT * FROM user_settings").fetchall():
+            for user_settings in old_conn.execute(
+                "SELECT * FROM user_settings"
+            ).fetchall():
                 print(user_settings)
 
                 new_conn.execute(
                     "INSERT INTO member (user_id, volume) VALUES (?, ?)",
                     (user_settings[0], user_settings[1]),
                 )
-            
+
             # migrate playlist
             for playlist in old_conn.execute("SELECT * FROM playlists").fetchall():
                 print(playlist)
@@ -341,12 +344,22 @@ async def migrate(old_db: str = "database.db", new_db: str = "database2.db"):
         except Exception as e:
             print("Error migrating data:", e)
 
+
 async def main():
-    await on_setup_tables("database.db")
-    await migrate("database.db", "database2.db")
+    # await on_setup_tables("database.db")
+    # await migrate("database.db", "database2.db")
 
     with duckdb.connect("database.db") as conn:
         print(conn.sql("SELECT * FROM issues"))
+
+    await migrate("database.db", "database2.db")
+
+    # with duckdb.connect("database.db") as conn:
+    #     print(conn.sql("SELECT * FROM guild"))
+    #     print(conn.sql("SELECT * FROM member"))
+    #     print(conn.sql("SELECT * FROM playlist"))
+    #     print(conn.sql("SELECT * FROM track"))
+    #     print(conn.sql("SELECT * FROM issue"))
 
 
 if __name__ == "__main__":

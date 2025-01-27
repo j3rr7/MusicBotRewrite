@@ -69,6 +69,12 @@ class Track:
         """Deletes a track record by track_id."""
         await self.db_manager.query("DELETE FROM track WHERE track_id = ?", (track_id,))
 
+    async def delete_by_playlist_id(self, playlist_id: uuid.UUID) -> None:
+        """Deletes all tracks for a given playlist_id."""
+        await self.db_manager.query(
+            "DELETE FROM track WHERE playlist_id = ?", (playlist_id,)
+        )
+
     async def list_by_playlist(self, playlist_id: uuid.UUID) -> List[Dict[str, Any]]:
         """Lists all tracks for a given playlist_id."""
         results = await self.db_manager.query(

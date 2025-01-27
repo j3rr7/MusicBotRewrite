@@ -15,10 +15,24 @@ class Member:
         user_id: int,
         volume: int = 30,
         filters: Optional[str] = None,
-        autoplay: str = "disabled",
+        autoplay: str = "partial",
         loop: str = "normal",
     ) -> None:
         """Creates a new member record."""
+
+        if not 0 <= volume <= 1000:
+            raise ValueError("Volume must be between 0 and 1000.")
+
+        if autoplay not in ["disabled", "partial", "enabled"]:
+            raise ValueError(
+                f"Invalid autoplay value: {autoplay}. Must be 'disabled', 'partial', or 'enabled'."
+            )
+
+        if loop not in ["normal", "single", "all"]:
+            raise ValueError(
+                f"Invalid loop value: {loop}. Must be 'normal', 'single', or 'all'."
+            )
+
         await self.db_manager.query(
             "INSERT INTO member (user_id, volume, filters, autoplay, loop) VALUES (?, ?, ?, ?, ?)",
             (user_id, volume, filters, autoplay, loop),

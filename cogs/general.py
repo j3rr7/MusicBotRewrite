@@ -21,7 +21,7 @@ class General(commands.Cog):
     @app_commands.command(name="ping", description="Ping the bot.")
     async def ping(self, interaction: discord.Interaction):
         await interaction.response.send_message(
-            "Latency: " + str(round(self.bot.latency * 1000)) + "ms", ephemeral=True
+            f"Latency: `{round(self.bot.latency * 1000):.2f}ms`", ephemeral=False
         )
 
     @app_commands.command(name="help", description="Get help")

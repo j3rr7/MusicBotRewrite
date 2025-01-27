@@ -13,7 +13,7 @@ class Playlist:
 
     async def create(
         self,
-        user_id: int,
+        owner_id: int,
         name: str,
         description: Optional[str] = None,
         public: bool = True,
@@ -24,8 +24,8 @@ class Playlist:
         if playlist_id is None:
             playlist_id = uuid.uuid4()
         await self.db_manager.query(
-            "INSERT INTO playlist (playlist_id, user_id, name, description, public, locked) VALUES (?, ?, ?, ?, ?, ?)",
-            (playlist_id, user_id, name, description, public, locked),
+            "INSERT INTO playlist (playlist_id, owner_id, name, description, public, locked) VALUES (?, ?, ?, ?, ?, ?)",
+            (playlist_id, owner_id, name, description, public, locked),
         )
         return playlist_id
 
@@ -38,7 +38,7 @@ class Playlist:
             result = results[0]
             columns = [
                 "playlist_id",
-                "user_id",
+                "owner_id",
                 "name",
                 "description",
                 "public",
@@ -46,6 +46,43 @@ class Playlist:
             ]
             return dict(zip(columns, result))
         return None
+
+    async def get_by_name_owner_id(
+        self,
+        name: str,
+        owner_id: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Retrieves a playlist record by name and owner_id."""
+        results = await self.db_manager.query(
+            "SELECT * FROM playlist WHERE name = ? AND owner_id = ?",
+            (name, owner_id),
+        )
+        if results:
+            result = results[0]
+            columns = [
+                "playlist_id",
+                "owner_id",
+                "name",
+                "description",
+                "public",
+                "locked",
+            ]
+            return dict(zip(columns, result))
+        return None
+
+    async def list_by_name_owner_id(
+        self,
+        name: str,
+        owner_id: int,
+    ) -> List[Dict[str, Any]]:
+
+        results = await self.db_manager.query(
+            "SELECT * FROM playlist WHERE name = ? AND owner_id = ?",
+            (name, owner_id),
+        )
+
+        columns = ["playlist_id", "owner_id", "name", "description", "public", "locked"]
+        return [dict(zip(columns, row)) for row in results]
 
     async def update(
         self,
@@ -83,13 +120,13 @@ class Playlist:
             "DELETE FROM playlist WHERE playlist_id = ?", (playlist_id,)
         )
 
-    async def list_by_user(self, user_id: int) -> List[Dict[str, Any]]:
-        """Lists all playlists for a given user_id."""
+    async def list_by_owner(self, owner_id: int) -> List[Dict[str, Any]]:
+        """Lists all playlists for a given owner_id."""
         results = await self.db_manager.query(
-            "SELECT * FROM playlist WHERE user_id = ?", (user_id,)
+            "SELECT * FROM playlist WHERE owner_id = ?", (owner_id,)
         )
         playlists = []
-        columns = ["playlist_id", "user_id", "name", "description", "public", "locked"]
+        columns = ["playlist_id", "owner_id", "name", "description", "public", "locked"]
         for row in results:
             playlists.append(dict(zip(columns, row)))
         return playlists
