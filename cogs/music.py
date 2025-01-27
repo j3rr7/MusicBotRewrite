@@ -139,7 +139,7 @@ class Music(commands.Cog):
             "disabled": wavelink.AutoPlayMode.disabled,
             "enabled": wavelink.AutoPlayMode.enabled,
         }
-        return mode_map.get(mode_string)
+        return mode_map.get(mode_string, wavelink.AutoPlayMode.partial)
 
     @staticmethod
     def convert_loop_mode(mode_string: str) -> Optional[wavelink.QueueMode]:
@@ -150,7 +150,7 @@ class Music(commands.Cog):
             "single": wavelink.QueueMode.loop,
             "all": wavelink.QueueMode.loop_all,
         }
-        return mode_map.get(mode_string)
+        return mode_map.get(mode_string, wavelink.QueueMode.normal)
 
     @staticmethod
     def milliseconds_to_hms_string(milliseconds):
@@ -1173,7 +1173,7 @@ class Music(commands.Cog):
                         True,
                     )
                     return
-                
+
                 await player.queue.put_wait(tracks[0])
 
             if not player.playing:
@@ -1348,7 +1348,9 @@ class Music(commands.Cog):
                 )
                 return
 
-            tracks = await self.database.track.list_by_playlist(playlist.get("playlist_id"))
+            tracks = await self.database.track.list_by_playlist(
+                playlist.get("playlist_id")
+            )
 
             if not tracks:
                 await interaction.followup.send(
@@ -1376,7 +1378,9 @@ class Music(commands.Cog):
     async def song_remove_autocomplete(
         self, interaction: discord.Interaction, playlist_name: str
     ) -> List[app_commands.Choice[str]]:
-        return await self._autocomplete_playlist(interaction, playlist_name, interaction.user.id)
+        return await self._autocomplete_playlist(
+            interaction, playlist_name, interaction.user.id
+        )
 
     @playlist_song.command(
         name="clear", description="Clears the playlist of all songs."
