@@ -133,7 +133,7 @@ class Music(commands.Cog):
     @staticmethod
     def convert_autoplay_mode(mode_string: str) -> Optional[wavelink.AutoPlayMode]:
         """Converts a string to a wavelink.AutoPlayMode enum member."""
-        mode_string = mode_string.lower()
+        mode_string = str(mode_string).lower()
         mode_map = {
             "partial": wavelink.AutoPlayMode.partial,
             "disabled": wavelink.AutoPlayMode.disabled,
@@ -144,7 +144,7 @@ class Music(commands.Cog):
     @staticmethod
     def convert_loop_mode(mode_string: str) -> Optional[wavelink.QueueMode]:
         """Converts a string to a wavelink.QueueMode enum member."""
-        mode_string = mode_string.lower()
+        mode_string = str(mode_string).lower()
         mode_map = {
             "normal": wavelink.QueueMode.normal,
             "single": wavelink.QueueMode.loop,
