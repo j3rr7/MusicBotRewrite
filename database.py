@@ -348,5 +348,6 @@ async def main():
     with duckdb.connect("database.db") as conn:
         print(conn.sql("SELECT * FROM issues"))
 
+
 if __name__ == "__main__":
     asyncio.run(main())

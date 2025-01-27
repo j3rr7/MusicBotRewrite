@@ -1,9 +1,6 @@
-import traceback
-import wavelink
 import discord
-import logging
+import wavelink
 from discord.ui import View
-from typing import List, Any
 
 
 class QueueView(View):
