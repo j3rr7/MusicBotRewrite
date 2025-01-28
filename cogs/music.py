@@ -971,9 +971,9 @@ class Music(commands.Cog):
                     f"Playlist '{playlist_name}' not found", ephemeral=True
                 )
                 return
-
-            await self.database.playlist.delete(playlist.get("playlist_id"))
+            
             await self.database.track.delete_by_playlist_id(playlist.get("playlist_id"))
+            await self.database.playlist.delete(playlist.get("playlist_id"))
 
             await interaction.followup.send(
                 f"Deleted playlist '{playlist_name}', use '/playlist list' to see all your playlists ",
