@@ -1,3 +1,4 @@
+import io
 import re
 import json
 import zlib
@@ -1036,9 +1037,6 @@ class Music(commands.Cog):
         )
 
     @playlist_group.command(name="export", description="Exports your playlist.")
-    @app_commands.describe(
-        playlist_name="The name of the playlist.",
-    )
     @app_commands.choices(
         extension=[
             app_commands.Choice(name="auto", value="auto"),
@@ -1092,20 +1090,34 @@ class Music(commands.Cog):
             compressed_data = zlib.compress(json_data.encode("utf-8"))
             # f = Fernet(FERNET_KEY)
             # encrypted_data = f.encrypt(compressed_data)
-            base64_data = base64.urlsafe_b64encode(compressed_data).decode("utf-8")
+            encoded_data = base64.urlsafe_b64encode(compressed_data)
+            base64_data = encoded_data.decode("utf-8")
 
             # send base64 string if less than 2000 characters
             if len(base64_data) <= 2000:
                 await interaction.followup.send(f"```{base64_data}```", ephemeral=True)
                 return
 
-            await interaction.followup.send("Unable to export playlist", ephemeral=True)
+            if extension != "auto":
+                await interaction.followup.send("Unable to export playlist", ephemeral=True)
+                return
+            
+            io_bytes = io.BytesIO(encoded_data)
+            await interaction.followup.send(file=discord.File(io_bytes, "playlist.txt"))
 
         except Exception as e:
             await interaction.followup.send(
                 f"Failed to export playlist: {e}", ephemeral=True
             )
             return
+
+    @playlist_export.autocomplete("playlist_name")
+    async def autocomplete_playlist_export(
+        self, interaction: discord.Interaction, playlist_name: str
+    ) -> List[app_commands.Choice[str]]:
+        return await self._autocomplete_playlist(
+            interaction, playlist_name, interaction.user.id
+        )
 
     @playlist_group.command(name="import", description="Imports a playlist.")
     async def playlist_import(
