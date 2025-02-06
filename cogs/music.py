@@ -53,6 +53,64 @@ class Music(commands.Cog):
         self.logger.info("Cog unloaded")
 
     @commands.Cog.listener()
+    async def on_voice_state_update(
+        self,
+        member: discord.Member,
+        before: discord.VoiceState,
+        after: discord.VoiceState,
+    ) -> None:
+        if member.bot:
+            return
+
+        guild = member.guild
+
+        player: wavelink.Player = guild.voice_client
+
+        if not isinstance(player, wavelink.Player):
+            return  # No player in this guild, nothing to do
+
+        bot_channel = player.channel
+
+        if not bot_channel:
+            return  # No bot channel, nothing to do
+
+        active_voice_channel = None
+        # Determine the active voice channel to check for members
+        if before.channel == bot_channel:
+            active_voice_channel = before.channel
+        elif after.channel == bot_channel:
+            active_voice_channel = after.channel
+
+        if active_voice_channel is None:
+            return  # Neither before nor after channel is the bot's channel, ignore.
+
+        human_members_in_channel = [
+            m for m in active_voice_channel.members if not m.bot
+        ]
+        human_count = len(human_members_in_channel)
+
+        if human_count == 0:
+            # bot is alone
+            if player.playing:
+                if not player.paused:
+                    await player.pause(True)
+                    self.logger.debug(
+                        f"Paused player in {guild.name} due to no human members in voice channel"
+                    )
+            elif player.connected:
+                await player.disconnect()
+                self.logger.debug(
+                    f"Disconnected player in {guild.name} due to no human members in voice channel"
+                )
+        else:
+            # bot is not alone
+            if player.paused:
+                await player.pause(False)
+                self.logger.debug(
+                    f"Resumed player in {guild.name} due to human members in voice channel"
+                )
+
+    @commands.Cog.listener()
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
         """Event listener for when a Wavelink node is ready."""
         node = payload.node
@@ -972,7 +1030,7 @@ class Music(commands.Cog):
                     f"Playlist '{playlist_name}' not found", ephemeral=True
                 )
                 return
-            
+
             await self.database.track.delete_by_playlist_id(playlist.get("playlist_id"))
             await self.database.playlist.delete(playlist.get("playlist_id"))
 
@@ -1099,9 +1157,11 @@ class Music(commands.Cog):
                 return
 
             if extension != "auto":
-                await interaction.followup.send("Unable to export playlist", ephemeral=True)
+                await interaction.followup.send(
+                    "Unable to export playlist", ephemeral=True
+                )
                 return
-            
+
             io_bytes = io.BytesIO(encoded_data)
             await interaction.followup.send(file=discord.File(io_bytes, "playlist.txt"))
 
