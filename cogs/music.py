@@ -150,7 +150,7 @@ class Music(commands.Cog):
 
             if self.use_local_lavalink:
                 node = wavelink.Node(
-                    uri="http://localhost:2333",
+                    uri="http://lavalink:2333",
                     identifier="Local Lavalink",
                     password="youshallnotpass",
                 )
