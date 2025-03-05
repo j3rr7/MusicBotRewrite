@@ -88,5 +88,4 @@ class LyricLookupView(View):
                 "This select menu is not for you!", ephemeral=True
             )
             return False
-        self.interaction = interaction
         return True
