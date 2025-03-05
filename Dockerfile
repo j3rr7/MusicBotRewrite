@@ -2,7 +2,7 @@ FROM python:3.12.8-alpine3.21
 
 WORKDIR /app
 
-RUN apk add --no-cache libffi-dev libsodium-dev python3-dev
+RUN apk add --no-cache libffi-dev libsodium-dev python3-dev git
 
 COPY requirements.txt .
 
