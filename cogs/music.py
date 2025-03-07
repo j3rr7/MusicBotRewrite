@@ -373,7 +373,7 @@ class Music(commands.Cog):
     async def _search_tracks(self, query: str) -> Optional[wavelink.Search]:
         """Searches for tracks using wavelink.Playable.search and handles errors."""
         try:
-            tracks: wavelink.Search = await wavelink.Playable.search(query)
+            tracks: wavelink.Search = await wavelink.Playable.search(query, source=wavelink.TrackSource.YouTube)
             return tracks
         except Exception as e:
             self.logger.error(
