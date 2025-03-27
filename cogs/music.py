@@ -150,7 +150,7 @@ class Music(commands.Cog):
 
             if self.use_local_lavalink:
                 node = wavelink.Node(
-                    uri="http://lavalink:2333",
+                    uri="http://localhost:2333",
                     identifier="Local Lavalink",
                     password="youshallnotpass",
                 )
@@ -373,7 +373,7 @@ class Music(commands.Cog):
     async def _search_tracks(self, query: str) -> Optional[wavelink.Search]:
         """Searches for tracks using wavelink.Playable.search and handles errors."""
         try:
-            tracks: wavelink.Search = await wavelink.Playable.search(query, source=wavelink.TrackSource.YouTube)
+            tracks: wavelink.Search = await wavelink.Playable.search(query, source=wavelink.TrackSource.YouTubeMusic)
             return tracks
         except Exception as e:
             self.logger.error(
