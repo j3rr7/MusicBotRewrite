@@ -41,6 +41,7 @@ class Music(commands.Cog):
         self.nodes = []
 
         self.use_local_lavalink = True
+        self.use_yt_music = False
         self.database: DatabaseManager = getattr(bot, "database", None)
 
     async def cog_load(self):
@@ -373,7 +374,10 @@ class Music(commands.Cog):
     async def _search_tracks(self, query: str) -> Optional[wavelink.Search]:
         """Searches for tracks using wavelink.Playable.search and handles errors."""
         try:
-            tracks: wavelink.Search = await wavelink.Playable.search(query, source=wavelink.TrackSource.YouTubeMusic)
+            tracks: wavelink.Search = await wavelink.Playable.search(
+                query, 
+                source=wavelink.TrackSource.YouTubeMusic if self.use_yt_music else wavelink.TrackSource.YouTube
+            )
             return tracks
         except Exception as e:
             self.logger.error(
@@ -814,6 +818,19 @@ class Music(commands.Cog):
             title="Connected",
             description=f"👋 Connected to voice channel {player.channel.mention}",
             color=discord.Color.green(),
+            timestamp=discord.utils.utcnow(),
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="togglesearch", description="Toggle search mode.")
+    @app_commands.guild_only()
+    async def toggle_search(self, interaction: discord.Interaction):
+        self.use_yt_music = not self.use_yt_music
+
+        embed = discord.Embed(
+            title="Search Mode Changed",
+            description=f"🔍 Search mode is now {'ytmusic' if self.use_yt_music else 'yt'}",
+            color=discord.Color.blue(),
             timestamp=discord.utils.utcnow(),
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
